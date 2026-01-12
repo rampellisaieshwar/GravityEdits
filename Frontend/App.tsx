@@ -495,6 +495,75 @@ const App: React.FC = () => {
     }));
   };
 
+  const handleSplitBgMusic = (offset: number) => {
+    if (!project || !project.bgMusic) return;
+
+    // Convert current BG Music into Audio Clips
+    const music = project.bgMusic;
+    const currentStart = music.start || 0;
+    const currentDuration = music.duration || 60; // Approximate if not set
+
+    // Calculate split
+    const splitRelTime = offset - currentStart; // Music might start later
+
+    // If click is NOT on the music bar (should have been checked by UI, but double check)
+    // Actually, offset passed is absolute Timeline Time from UI
+    // So splitRelTime is correct offset into the clip.
+    // Wait, let's verify Timeline logic. 
+    // Timeline passes `offsetTime` derived from `offsetX` relative to PAGE/SCROLL?
+    // No, `offsetX = e.clientX - rect.left`. This is relative to the element (BgMusic div).
+    // The BgMusic div IS rendered at `start` time.
+    // So `offsetX / zoom` IS the relative time into the clip.
+    // So `splitRelTime` should actually just be `offset` if "offset" meant "relative offset".
+
+    // Let's re-read Timeline.tsx click handler:
+    // const rect = e.currentTarget.getBoundingClientRect();
+    // const offsetX = e.clientX - rect.left;
+    // const offsetTime = offsetX / zoom;
+    // props.onSplitBgMusic(offsetTime);
+
+    // YES, offsetTime IS relative to the clip start.
+
+    const splitPoint = offset; // Clarifying naming
+
+    if (splitPoint <= 0 || splitPoint >= currentDuration) return;
+
+    // Create Clips
+    // Part 1: Start -> splitPoint
+    const part1 = {
+      id: `music-migrated-1-${Date.now()}`,
+      source: music.source,
+      start: currentStart,
+      duration: splitPoint,
+      track: 99 // Dedicated Music Track ID
+    };
+
+    // Part 2: splitPoint -> End
+    // Start of part 2 is currentStart + splitPoint
+    const part2 = {
+      id: `music-migrated-2-${Date.now()}`,
+      source: music.source,
+      start: currentStart + splitPoint,
+      duration: currentDuration - splitPoint,
+      track: 99
+    };
+
+    // Update Project
+    setProject(prev => {
+      if (!prev) return null;
+      // Check if track 99 exists, if not add it
+      const currentTracks = new Set(prev.audioTracks || [2]);
+      currentTracks.add(99);
+
+      return {
+        ...prev,
+        bgMusic: undefined, // Remove legacy field
+        audioClips: [...(prev.audioClips || []), part1, part2],
+        audioTracks: Array.from(currentTracks).sort((a, b) => a - b)
+      };
+    });
+  };
+
   const handleTrackVolumeChange = (track: string, volume: number) => {
     if (!project) return;
     const newVolumes = {
@@ -725,6 +794,9 @@ const App: React.FC = () => {
             onUpdateOverlay={handleUpdateOverlay}
             onAddOverlay={handleAddOverlay}
             onUpdateBgMusic={handleUpdateBgMusic}
+            onUpdateAudioClip={handleUpdateAudioClip}
+            onSplitAudioClip={handleSplitAudioClip}
+            onSplitBgMusic={handleSplitBgMusic}
           />
 
         </div>

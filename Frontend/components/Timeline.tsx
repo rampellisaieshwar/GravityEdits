@@ -27,6 +27,7 @@ interface TimelineProps {
   onUpdateBgMusic: (updates: { start?: number, duration?: number }) => void;
   onUpdateAudioClip?: (id: string, updates: Partial<any>) => void;
   onSplitAudioClip?: (id: string, offset: number) => void;
+  onSplitBgMusic?: (offset: number) => void;
 }
 
 // Memoized Track Component to prevent re-rendering on 60fps time updates
@@ -46,7 +47,8 @@ const TimelineTracks = React.memo(({
   selectedOverlayId,
   onUpdateBgMusic,
   onUpdateAudioClip,
-  onSplitAudioClip
+  onSplitAudioClip,
+  onSplitBgMusic
   // Note: onVolumeChange was missing in previous destructuring but present in type
 }: {
   project: VideoProject;
@@ -65,12 +67,13 @@ const TimelineTracks = React.memo(({
   onUpdateBgMusic: (updates: { start?: number, duration?: number }) => void;
   onUpdateAudioClip?: (id: string, updates: Partial<any>) => void;
   onSplitAudioClip?: (id: string, offset: number) => void;
+  onSplitBgMusic?: (offset: number) => void;
 }) => {
   const audioTracks = project.audioTracks || [2]; // Default to just track 2 if undefined
   const overlays = project.overlays || [];
 
   // Create a local object for easier access in callbacks where simple access is needed
-  const props = { onUpdateAudioClip, onSplitAudioClip };
+  const props = { onUpdateAudioClip, onSplitAudioClip, onSplitBgMusic };
 
   return (
     <div className="p-4 flex flex-col gap-1 w-max min-w-full">
@@ -333,6 +336,18 @@ const TimelineTracks = React.memo(({
               left: 0
             }}
             className="bg-purple-900/30 border border-purple-500/20 relative overflow-hidden shrink-0 cursor-grab active:cursor-grabbing hover:bg-purple-900/40 transition-colors rounded-sm h-full"
+            title={`${project.bgMusic.source}`}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (activeTool === 'razor') {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const offsetX = e.clientX - rect.left;
+                const offsetTime = offsetX / zoom;
+                /* @ts-ignore */
+                if (props.onSplitBgMusic) props.onSplitBgMusic(offsetTime);
+              }
+            }}
           >
             <div className="sticky left-2 top-2 text-[10px] text-purple-300 font-bold z-10 flex items-center gap-1 pointer-events-none">
               <span className="opacity-50">♫</span> {project.bgMusic.source}
@@ -372,7 +387,8 @@ const Timeline: React.FC<TimelineProps> = ({
   onAddOverlay,
   onUpdateBgMusic,
   onUpdateAudioClip,
-  onSplitAudioClip
+  onSplitAudioClip,
+  onSplitBgMusic
 }) => {
   if (!project) return null;
 
@@ -636,6 +652,7 @@ const Timeline: React.FC<TimelineProps> = ({
             onUpdateBgMusic={onUpdateBgMusic}
             onUpdateAudioClip={onUpdateAudioClip}
             onSplitAudioClip={onSplitAudioClip}
+            onSplitBgMusic={onSplitBgMusic}
           />
         </div>
       </div>
