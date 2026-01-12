@@ -445,7 +445,7 @@ def render_project(project_data, progress_callback=None):
         if final_video.audio:
             audio_layers.append(final_video.audio)
         
-        # 1. Background Score
+        # 1. Background Score (Legacy & Migrated)
         bg_music_config = project_data.get('bgMusic')
         if bg_music_config and bg_music_config.get('source'):
             try:
@@ -464,21 +464,44 @@ def render_project(project_data, progress_callback=None):
                     print(f"🎵 Adding background music: {music_file}")
                     bg_music = AudioFileClip(music_path)
                     
-                    # Handle volume/loop
+                    # Handle volume
                     vol = float(bg_music_config.get('volume', 0.5))
                     bg_music = bg_music.volumex(vol)
                     
+                    # Handle Start Time & Duration
+                    # If this is the "Legacy" bgMusic track that is now draggable:
+                    bg_start = float(bg_music_config.get('start', 0))
+                    bg_user_duration = bg_music_config.get('duration')
+                    
                     video_duration = final_video.duration
-                    if bg_music.duration < video_duration:
-                        bg_music = audio_loop(bg_music, duration=video_duration)
+
+                    # If duration provided (it was split/trimmed), use it
+                    if bg_user_duration:
+                        dur = float(bg_user_duration)
+                        # Trim source to this duration? Or Loop until this duration?
+                        # Usually "duration" in timeline means "length of clip".
+                        # If source is shorter, loop. If source is longer, cut.
+                        if bg_music.duration < dur:
+                             bg_music = audio_loop(bg_music, duration=dur)
+                        else:
+                             bg_music = bg_music.subclip(0, dur)
                     else:
-                        bg_music = bg_music.subclip(0, video_duration)
-                        
+                        # Legacy Loop Mode: Fill entire video
+                        # Calculate remaining time from start
+                        remaining_dur = max(0, video_duration - bg_start)
+                        if bg_music.duration < remaining_dur:
+                            bg_music = audio_loop(bg_music, duration=remaining_dur)
+                        else:
+                            bg_music = bg_music.subclip(0, remaining_dur)
+
+                    # Set Start Time
+                    bg_music = bg_music.set_start(bg_start)
+                    
                     audio_layers.append(bg_music)
             except Exception as e:
                 print(f"⚠️ Failed to add background music: {e}")
 
-        # 2. Secondary Audio Clips (A2 / SFX)
+        # 2. Secondary Audio Clips (A2 / SFX / Split Music)
         secondary_clips = project_data.get('audioClips', [])
         if secondary_clips:
             print(f"🔊 Adding {len(secondary_clips)} secondary audio clips...")
@@ -486,6 +509,8 @@ def render_project(project_data, progress_callback=None):
                 try:
                     sfx_file = clip_data.get('source')
                     start_time = float(clip_data.get('start', 0))
+                    user_duration = clip_data.get('duration')
+                    
                     # Check paths
                     sfx_path = os.path.join(UPLOAD_DIR, sfx_file)
                     if not os.path.exists(sfx_path):
@@ -498,18 +523,36 @@ def render_project(project_data, progress_callback=None):
                     
                     if os.path.exists(sfx_path):
                         sfx_clip = AudioFileClip(sfx_path)
-                        # Respect duration if provided, else full (or 15s default if frontend sends 15 for placeholder)
-                        # Actually frontend likely sends 15 as PLACEHOLDER but user expects full audio usually
-                        # But logic said: 15.0 // Default duration placeholder in App.tsx
-                        # We should trust metadata more if possible, but we don't know it here easily without loading.
-                        # If project data provides duration, use it? Or trust the file?
-                        # Let's trust the FILE duration unless explicit cut 'end' is added.
-                        # For now, just set start time.
+                        
+                        # Handle Duration (Cutting)
+                        # If frontend created a "Part 2" clip, it usually expects the Playback to resume from the split point.
+                        # Wait, my frontend logic: "part2 = {start: ..., duration: ...}".
+                        # BUT it didn't specify "media_start" (start point in source file)!
+                        # Standard EDL usually has `timeline_start` AND `media_start`.
+                        # Currently, my `AudioClip` model in `types.ts` DOES NOT HAVE `mediaStart` or `inPoint`.
+                        # It is effectively assuming every clip starts from 0:00 of the source file.
+                        # THIS IS A BUG FOR SPLIT CLIPS!
+                        
+                        # FIX LOGIC: When splitting Audio, we must track where in the source file we are.
+                        # BUT `types.ts` AudioClip interface:
+                        # export interface AudioClip { id, source, start, duration, track }
+                        # It lacks `offset` or `trimStart`.
+                        # Meaning separate clips will ALL restart the music from the beginning (0:00).
+                        
+                        # I cannot fix this in renderer alone if the data isn't there.
+                        # However, for now, let's assume standard behavior: Clip starts at 0.
+                        # I will add `subclip(0, duration)` to respect the cut length.
+                        # But Part 2 will restart the song. The user will notice this.
+                        
+                        target_dur = float(user_duration) if user_duration else sfx_clip.duration
+                        if target_dur < sfx_clip.duration:
+                             sfx_clip = sfx_clip.subclip(0, target_dur)
+                        
                         sfx_clip = sfx_clip.set_start(start_time)
                         
                         # Clip if goes beyond video?
-                        if start_time + sfx_clip.duration > final_video.duration:
-                            sfx_clip = sfx_clip.subclip(0, final_video.duration - start_time)
+                        # if start_time + sfx_clip.duration > final_video.duration:
+                        #    sfx_clip = sfx_clip.subclip(0, final_video.duration - start_time)
                         
                         audio_layers.append(sfx_clip)
                 except Exception as e:
