@@ -442,6 +442,16 @@ const App: React.FC = () => {
     setProject({ ...project, audioClips: updatedAudioClips });
   };
 
+  const handleUpdateBgMusic = (updates: { start?: number, duration?: number }) => {
+    setProject(prev => {
+      if (!prev || !prev.bgMusic) return prev;
+      return {
+        ...prev,
+        bgMusic: { ...prev.bgMusic, ...updates }
+      };
+    });
+  };
+
   const handleTrackVolumeChange = (track: string, volume: number) => {
     if (!project) return;
     const newVolumes = {
@@ -671,6 +681,7 @@ const App: React.FC = () => {
             onRemoveTrack={handleRemoveTrack}
             onUpdateOverlay={handleUpdateOverlay}
             onAddOverlay={handleAddOverlay}
+            onUpdateBgMusic={handleUpdateBgMusic}
           />
 
         </div>

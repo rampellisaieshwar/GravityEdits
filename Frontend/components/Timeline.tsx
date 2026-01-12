@@ -24,6 +24,7 @@ interface TimelineProps {
   onAddOverlay: (start: number) => void;
   onSelectOverlay?: (id: string) => void;
   selectedOverlayId?: string | null;
+  onUpdateBgMusic: (updates: { start?: number, duration?: number }) => void;
 }
 
 // Memoized Track Component to prevent re-rendering on 60fps time updates
@@ -55,6 +56,7 @@ const TimelineTracks = React.memo(({
   onAddAudioClip: (source: string, time: number, track: number) => void;
   onVolumeChange: (track: string, volume: number) => void;
   onUpdateOverlay: (id: string, updates: Partial<TextOverlay>) => void;
+  onUpdateBgMusic: (updates: { start?: number, duration?: number }) => void;
 }) => {
   const audioTracks = project.audioTracks || [2]; // Default to just track 2 if undefined
   const overlays = project.overlays || [];
@@ -103,8 +105,8 @@ const TimelineTracks = React.memo(({
               width: `${overlay.duration * zoom}px`
             }}
             className={`absolute top-1 bottom-1 border rounded px-2 overflow-hidden text-xs text-white flex items-center shadow-lg cursor-grab active:cursor-grabbing z-20 group transition-all ${selectedOverlayId === overlay.id
-                ? 'bg-purple-600 border-white ring-2 ring-white/50'
-                : 'bg-purple-600/80 border-purple-400'
+              ? 'bg-purple-600 border-white ring-2 ring-white/50'
+              : 'bg-purple-600/80 border-purple-400'
               }`}
           >
             <div className="font-bold truncate pointer-events-none">{overlay.content}</div>
@@ -266,24 +268,37 @@ const TimelineTracks = React.memo(({
 
       {/* Background Music Track */}
       {project.bgMusic && (
-        <div className="flex items-stretch h-12 min-w-full mt-1">
-          <div
-            style={{
-              width: `${project.edl.reduce((acc, c) => acc + (c.duration || 0), 0) * zoom}px`,
-              minWidth: '100%'
+        <div className="relative flex items-stretch h-12 min-w-full mt-1 border-t border-white/5 bg-transparent">
+          <motion.div
+            drag="x"
+            dragMomentum={false}
+            dragConstraints={{ left: 0, right: 10000 }} // Infinite right
+            onDragEnd={(_, info) => {
+              // Calculate new start time based on drag offset
+              const currentStart = project.bgMusic?.start || 0;
+              const changeTime = info.offset.x / zoom;
+              const newStart = Math.max(0, currentStart + changeTime);
+              onUpdateBgMusic({ start: newStart });
             }}
-            className="bg-purple-900/30 border-t border-purple-500/20 relative overflow-hidden shrink-0"
+            style={{
+              x: (project.bgMusic.start || 0) * zoom,
+              width: `${(project.bgMusic.duration || project.edl.reduce((acc, c) => acc + (c.duration || 0), 0)) * zoom}px`,
+              minWidth: '100px', // Minimum visual width
+              position: 'absolute',
+              left: 0
+            }}
+            className="bg-purple-900/30 border border-purple-500/20 relative overflow-hidden shrink-0 cursor-grab active:cursor-grabbing hover:bg-purple-900/40 transition-colors rounded-sm h-full"
           >
-            <div className="sticky left-2 top-2 text-[10px] text-purple-300 font-bold z-10 flex items-center gap-1">
+            <div className="sticky left-2 top-2 text-[10px] text-purple-300 font-bold z-10 flex items-center gap-1 pointer-events-none">
               <span className="opacity-50">♫</span> {project.bgMusic.source}
             </div>
-            <div className="absolute bottom-0 left-0 w-full h-full flex items-end justify-between gap-[1px] px-1 opacity-40">
+            <div className="absolute bottom-0 left-0 w-full h-full flex items-end justify-between gap-[1px] px-1 opacity-40 pointer-events-none">
               {/* Simplified Waveform Pattern */}
               {Array.from({ length: 100 }).map((_, j) => (
                 <div key={j} style={{ height: `${30 + Math.random() * 40}%`, width: '1%' }} className="bg-purple-400/40 rounded-t" />
               ))}
             </div>
-          </div>
+          </motion.div>
         </div>
       )}
     </div>
@@ -309,7 +324,8 @@ const Timeline: React.FC<TimelineProps> = ({
   onRemoveTrack,
   onVolumeChange,
   onUpdateOverlay,
-  onAddOverlay
+  onAddOverlay,
+  onUpdateBgMusic
 }) => {
   if (!project) return null;
 
@@ -570,6 +586,7 @@ const Timeline: React.FC<TimelineProps> = ({
             activeTool={activeTool}
             onSplit={onSplitClip}
             onUpdateOverlay={onUpdateOverlay}
+            onUpdateBgMusic={onUpdateBgMusic}
           />
         </div>
       </div>

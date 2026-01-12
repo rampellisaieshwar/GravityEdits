@@ -50,6 +50,8 @@ export interface VideoProject {
     source: string;
     volume: number;
     loop: boolean;
+    start?: number; // Timeline start time
+    duration?: number; // Optional duration override
   };
   audioClips?: AudioClip[]; // Secondary audio clips
   audioTracks?: number[];   // Active secondary audio tracks (e.g. [2, 3])
