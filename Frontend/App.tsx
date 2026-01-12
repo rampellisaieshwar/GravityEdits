@@ -542,6 +542,17 @@ const App: React.FC = () => {
         )}
 
         <div className="flex items-center gap-3">
+          {/* Status Indicator */}
+          <div
+            className={`hidden md:flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-bold uppercase tracking-wider transition-all ${(typeof window !== 'undefined' && localStorage.getItem("gravity_api_key"))
+                ? "bg-green-500/10 border-green-500/30 text-green-500"
+                : "bg-red-500/10 border-red-500/30 text-red-500 animate-pulse"
+              }`}
+          >
+            <div className={`w-1.5 h-1.5 rounded-full ${(typeof window !== 'undefined' && localStorage.getItem("gravity_api_key")) ? "bg-green-500" : "bg-red-500"}`} />
+            {(typeof window !== 'undefined' && localStorage.getItem("gravity_api_key")) ? "System Active" : "No API Key"}
+          </div>
+
           <button
             onClick={() => setIsSettingsOpen(true)}
             className="flex items-center gap-2 bg-[#2A2A2A] hover:bg-[#333] px-3 py-1 rounded text-[10px] font-bold uppercase transition-colors"
