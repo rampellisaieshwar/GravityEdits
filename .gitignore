@@ -1,0 +1,24 @@
+# System files
+.DS_Store
+Thumbs.db
+
+# Dependencies
+node_modules/
+__pycache__/
+*.py[cod]
+venv/
+env/
+.env
+
+# Build outputs
+dist/
+build/
+
+# Media and large files
+*.mp4
+*.mov
+*.zip
+uploads/
+exports/
+projects/
+processing/

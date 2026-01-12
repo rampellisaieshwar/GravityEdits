@@ -1,0 +1,8 @@
+{
+  "name": "Gravity AI Video Editor Pro",
+  "description": "A professional-grade AI-assisted video editing interface for automated EDL generation and viral content identification.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
