@@ -25,6 +25,8 @@ interface TimelineProps {
   onSelectOverlay?: (id: string) => void;
   selectedOverlayId?: string | null;
   onUpdateBgMusic: (updates: { start?: number, duration?: number }) => void;
+  onUpdateAudioClip?: (id: string, updates: Partial<any>) => void;
+  onSplitAudioClip?: (id: string, offset: number) => void;
 }
 
 // Memoized Track Component to prevent re-rendering on 60fps time updates
@@ -41,7 +43,11 @@ const TimelineTracks = React.memo(({
   onVolumeChange,
   onUpdateOverlay,
   onSelectOverlay,
-  selectedOverlayId
+  selectedOverlayId,
+  onUpdateBgMusic,
+  onUpdateAudioClip,
+  onSplitAudioClip
+  // Note: onVolumeChange was missing in previous destructuring but present in type
 }: {
   project: VideoProject;
   zoom: number;
@@ -57,9 +63,14 @@ const TimelineTracks = React.memo(({
   onVolumeChange: (track: string, volume: number) => void;
   onUpdateOverlay: (id: string, updates: Partial<TextOverlay>) => void;
   onUpdateBgMusic: (updates: { start?: number, duration?: number }) => void;
+  onUpdateAudioClip?: (id: string, updates: Partial<any>) => void;
+  onSplitAudioClip?: (id: string, offset: number) => void;
 }) => {
   const audioTracks = project.audioTracks || [2]; // Default to just track 2 if undefined
   const overlays = project.overlays || [];
+
+  // Create a local object for easier access in callbacks where simple access is needed
+  const props = { onUpdateAudioClip, onSplitAudioClip };
 
   return (
     <div className="p-4 flex flex-col gap-1 w-max min-w-full">
@@ -246,15 +257,49 @@ const TimelineTracks = React.memo(({
           {/* Render Audio Clips for this Track */}
           {project.audioClips?.map(clip => (
             clip.track === trackId && (
-              <div
+              <motion.div
                 key={clip.id}
-                className="absolute top-1 bottom-1 bg-teal-800/60 border border-teal-500/50 rounded px-2 overflow-hidden text-[9px] text-teal-100 flex items-center shadow-lg cursor-pointer hover:bg-teal-700/80"
-                style={{ left: `${clip.start * zoom}px`, width: `${Math.max(20, clip.duration * zoom)}px` }}
+                drag="x"
+                dragMomentum={false}
+                dragConstraints={{ left: 0, right: 10000 }}
+                onDragEnd={(_, info) => {
+                  // Update start time based on drag
+                  // We need a way to update specific audio clip
+                  // passing a new callback "onUpdateAudioClip"
+                  const changeX = info.offset.x;
+                  const changeTime = changeX / zoom;
+                  const newStart = Math.max(0, clip.start + changeTime);
+                  // We need to expose this action
+                  // For now, we'll assume a prop 'onUpdateAudioClip' exists or we add it
+                  // calling onVolumeChange is wrong.
+                  // Let's rely on new prop
+                  /* @ts-ignore */
+                  if (props.onUpdateAudioClip) props.onUpdateAudioClip(clip.id, { start: newStart });
+                }}
+                className="absolute top-1 bottom-1 bg-teal-800/60 border border-teal-500/50 rounded px-2 overflow-hidden text-[9px] text-teal-100 flex items-center shadow-lg cursor-pointer hover:bg-teal-700/80 active:cursor-grabbing"
+                style={{
+                  x: clip.start * zoom,
+                  width: `${Math.max(20, clip.duration * zoom)}px`,
+                  position: 'absolute',
+                  left: 0
+                }}
                 title={`${clip.source} (${formatDuration(clip.duration)})`}
                 onMouseDown={(e) => e.stopPropagation()} // Prevent seek
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (activeTool === 'razor') {
+                    // Split Audio Logic
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const clickX = e.clientX - rect.left;
+                    const offsetTime = clickX / zoom;
+                    // Split relative to clip start
+                    /* @ts-ignore */
+                    if (props.onSplitAudioClip) props.onSplitAudioClip(clip.id, offsetTime);
+                  }
+                }}
               >
-                <span className="truncate">{clip.source}</span>
-              </div>
+                <span className="truncate pointer-events-none">{clip.source}</span>
+              </motion.div>
             )
           ))}
 
@@ -325,7 +370,9 @@ const Timeline: React.FC<TimelineProps> = ({
   onVolumeChange,
   onUpdateOverlay,
   onAddOverlay,
-  onUpdateBgMusic
+  onUpdateBgMusic,
+  onUpdateAudioClip,
+  onSplitAudioClip
 }) => {
   if (!project) return null;
 
@@ -587,6 +634,8 @@ const Timeline: React.FC<TimelineProps> = ({
             onSplit={onSplitClip}
             onUpdateOverlay={onUpdateOverlay}
             onUpdateBgMusic={onUpdateBgMusic}
+            onUpdateAudioClip={onUpdateAudioClip}
+            onSplitAudioClip={onSplitAudioClip}
           />
         </div>
       </div>

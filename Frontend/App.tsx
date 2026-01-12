@@ -452,6 +452,49 @@ const App: React.FC = () => {
     });
   };
 
+  const handleUpdateAudioClip = (id: string, updates: Partial<any>) => {
+    setProject(prev => {
+      if (!prev || !prev.audioClips) return prev;
+      return {
+        ...prev,
+        audioClips: prev.audioClips.map(c => c.id === id ? { ...c, ...updates } : c)
+      };
+    });
+  };
+
+  const handleSplitAudioClip = (id: string, offset: number) => {
+    // Offset is relative to clip start
+    if (!project || !project.audioClips) return;
+
+    const clip = project.audioClips.find(c => c.id === id);
+    if (!clip) return;
+
+    const splitPoint = offset;
+
+    if (splitPoint <= 0 || splitPoint >= clip.duration) return;
+
+    // Create two new clips
+    const firstPart = {
+      ...clip,
+      id: `audio-${Date.now()}-1`,
+      duration: splitPoint
+    };
+
+    const secondPart = {
+      ...clip,
+      id: `audio-${Date.now()}-2`,
+      start: clip.start + splitPoint,
+      duration: clip.duration - splitPoint
+    };
+
+    setProject(prev => ({
+      ...prev!,
+      audioClips: (prev!.audioClips || [])
+        .filter(c => c.id !== id)
+        .concat([firstPart, secondPart])
+    }));
+  };
+
   const handleTrackVolumeChange = (track: string, volume: number) => {
     if (!project) return;
     const newVolumes = {
