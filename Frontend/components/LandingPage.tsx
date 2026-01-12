@@ -24,6 +24,24 @@ const LandingPage: React.FC<LandingPageProps> = ({ onProjectLoaded, onStartUploa
     const [projects, setProjects] = useState<ProjectMeta[]>([]);
     const [newProjectName, setNewProjectName] = useState("");
     const [isLoading, setIsLoading] = useState(false);
+    const [userInitials, setUserInitials] = useState("?");
+
+    const updateProfile = () => {
+        if (typeof window === 'undefined') return;
+        const name = localStorage.getItem("gravity_user_name");
+        if (name) {
+            const initials = name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+            setUserInitials(initials);
+        } else {
+            setUserInitials("?");
+        }
+    }
+
+    useEffect(() => {
+        updateProfile();
+        window.addEventListener('profileUpdated', updateProfile);
+        return () => window.removeEventListener('profileUpdated', updateProfile);
+    }, []);
 
     useEffect(() => {
         // Auto-play ambient sound
@@ -274,7 +292,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onProjectLoaded, onStartUploa
                     className="fixed top-8 right-8 flex items-center gap-3 bg-[#111] hover:bg-[#1A1A1A] border border-white/10 hover:border-white/30 pl-1 pr-4 py-1.5 rounded-full transition-all group z-50 cursor-pointer"
                 >
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black border border-white/10 ${typeof window !== 'undefined' && localStorage.getItem('gravity_api_key') ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-900/50' : 'bg-gray-800 text-gray-400'}`}>
-                        {typeof window !== 'undefined' && localStorage.getItem('gravity_api_key') ? 'JS' : '?'}
+                        {userInitials}
                     </div>
                     <div className="text-left">
                         <span className="block text-[10px] uppercase font-bold text-gray-400 group-hover:text-blue-400 transition-colors tracking-wider">

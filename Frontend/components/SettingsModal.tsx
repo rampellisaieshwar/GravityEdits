@@ -11,21 +11,30 @@ interface SettingsModalProps {
 const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, isOpen }) => {
     const [apiKey, setApiKey] = useState("");
     const [provider, setProvider] = useState("gemini");
+    const [userName, setUserName] = useState("");
     const [isVisible, setIsVisible] = useState(false);
 
     useEffect(() => {
         // Load from Local Storage on mount
         const savedKey = localStorage.getItem("gravity_api_key");
         const savedProvider = localStorage.getItem("gravity_llm_provider");
+        const savedName = localStorage.getItem("gravity_user_name");
+
         if (savedKey) setApiKey(savedKey);
         if (savedProvider) setProvider(savedProvider);
+        if (savedName) setUserName(savedName);
     }, [isOpen]);
 
     const handleSave = () => {
         if (apiKey.trim()) {
             localStorage.setItem("gravity_api_key", apiKey.trim());
             localStorage.setItem("gravity_llm_provider", provider);
-            alert("Settings Saved! Your key is stored locally in your browser.");
+            localStorage.setItem("gravity_user_name", userName.trim() || "Editor"); // Default if empty
+
+            // Dispatch event to update UI immediately
+            window.dispatchEvent(new Event("profileUpdated"));
+
+            alert("Settings Saved!");
             onClose();
         } else {
             localStorage.removeItem("gravity_api_key"); // Allow clearing
@@ -47,7 +56,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, isOpen }) => {
                 <div className="h-14 border-b border-white/5 flex items-center justify-between px-6 bg-white/5">
                     <div className="flex items-center gap-2 text-white">
                         <Key size={18} className="text-yellow-500" />
-                        <span className="font-bold tracking-wide">API Settings</span>
+                        <span className="font-bold tracking-wide">User Profile</span>
                     </div>
                     <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
                         <X size={20} />
@@ -62,13 +71,24 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, isOpen }) => {
                         <div>
                             <p className="font-bold text-blue-100 mb-1">Privacy First</p>
                             <p className="leading-relaxed opacity-80">
-                                Your API key is stored <strong>locally in your browser</strong>.
-                                We do not save it on our servers. It is strictly used to communicate with the AI model during your session.
+                                Your keys and data are stored <strong>locally</strong>.
+                                We do not track your credentials.
                             </p>
                         </div>
                     </div>
 
                     <div className="space-y-4">
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Display Name</label>
+                            <input
+                                type="text"
+                                value={userName}
+                                onChange={(e) => setUserName(e.target.value)}
+                                placeholder="e.g. Director Dave"
+                                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors text-sm"
+                            />
+                        </div>
+
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">AI Provider</label>
                             <div className="grid grid-cols-2 gap-2">

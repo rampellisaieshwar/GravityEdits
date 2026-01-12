@@ -58,6 +58,20 @@ const App: React.FC = () => {
   const [sidebarTab, setSidebarTab] = useState<'media' | 'viral' | 'audio'>('media');
   const [view, setView] = useState<'edit' | 'color'>('edit');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [userInitials, setUserInitials] = useState("JS");
+
+  const updateProfile = () => {
+    if (typeof window === 'undefined') return;
+    const name = localStorage.getItem("gravity_user_name") || "Editor";
+    const initials = name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+    setUserInitials(initials || "ED");
+  }
+
+  useEffect(() => {
+    updateProfile();
+    window.addEventListener('profileUpdated', updateProfile);
+    return () => window.removeEventListener('profileUpdated', updateProfile);
+  }, []);
 
   // Playback State
   const [currentTime, setCurrentTime] = useState(0);
@@ -545,8 +559,8 @@ const App: React.FC = () => {
           {/* Status Indicator */}
           <div
             className={`hidden md:flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-bold uppercase tracking-wider transition-all ${(typeof window !== 'undefined' && localStorage.getItem("gravity_api_key"))
-                ? "bg-green-500/10 border-green-500/30 text-green-500"
-                : "bg-red-500/10 border-red-500/30 text-red-500 animate-pulse"
+              ? "bg-green-500/10 border-green-500/30 text-green-500"
+              : "bg-red-500/10 border-red-500/30 text-red-500 animate-pulse"
               }`}
           >
             <div className={`w-1.5 h-1.5 rounded-full ${(typeof window !== 'undefined' && localStorage.getItem("gravity_api_key")) ? "bg-green-500" : "bg-red-500"}`} />
@@ -559,7 +573,7 @@ const App: React.FC = () => {
           >
             <Settings size={12} /> Project Configuration
           </button>
-          <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-[10px] font-black border border-blue-400/50 shadow-inner">JS</div>
+          <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-[10px] font-black border border-blue-400/50 shadow-inner">{userInitials}</div>
         </div>
       </header>
 
