@@ -520,6 +520,7 @@ const App: React.FC = () => {
               projectName={currentProjectName}
             />
           )}
+          {isSettingsOpen && <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />}
         </AnimatePresence>
       </>
     );
