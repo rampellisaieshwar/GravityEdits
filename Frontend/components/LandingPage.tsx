@@ -285,54 +285,55 @@ const LandingPage: React.FC<LandingPageProps> = ({ onProjectLoaded, onStartUploa
                         </span>
                     </div>
                 </button>
-
-                {/* New Project Modal */}
-                <AnimatePresence>
-                    {showNewProjectModal && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setShowNewProjectModal(false)}>
-                            <motion.div
-                                initial={{ scale: 0.9, opacity: 0 }}
-                                animate={{ scale: 1, opacity: 1 }}
-                                exit={{ scale: 0.9, opacity: 0 }}
-                                onClick={(e) => e.stopPropagation()}
-                                className="bg-[#151515] border border-[#333] p-8 rounded-2xl max-w-md w-full shadow-2xl space-y-6"
-                            >
-                                <h2 className="text-2xl font-bold text-center text-white">Name Your Project</h2>
-
-                                <div className="space-y-2">
-                                    <input
-                                        autoFocus
-                                        type="text"
-                                        className="w-full bg-[#0A0A0A] border border-[#333] p-4 rounded-xl text-white placeholder:text-gray-600 focus:outline-none focus:border-blue-500 text-center text-xl font-bold"
-                                        placeholder="My Awesome Video"
-                                        value={newProjectName}
-                                        onChange={e => setNewProjectName(e.target.value)}
-                                        onKeyDown={e => e.key === 'Enter' && handleCreateProject()}
-                                    />
-                                </div>
-
-                                <div className="flex gap-4">
-                                    <button
-                                        onClick={() => setShowNewProjectModal(false)}
-                                        className="flex-1 py-3 text-gray-500 hover:text-white font-bold transition-colors"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        onClick={handleCreateProject}
-                                        disabled={isLoading}
-                                        className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-blue-900/40 flex items-center justify-center gap-2"
-                                    >
-                                        {isLoading ? <Clock size={18} className="animate-spin" /> : <Plus size={18} />}
-                                        Create Project
-                                    </button>
-                                </div>
-                            </motion.div>
-                        </div>
-                    )}
-                </AnimatePresence>
             </div>
-            );
+
+            {/* New Project Modal */}
+            <AnimatePresence>
+                {showNewProjectModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setShowNewProjectModal(false)}>
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.9, opacity: 0 }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="bg-[#151515] border border-[#333] p-8 rounded-2xl max-w-md w-full shadow-2xl space-y-6"
+                        >
+                            <h2 className="text-2xl font-bold text-center text-white">Name Your Project</h2>
+
+                            <div className="space-y-2">
+                                <input
+                                    autoFocus
+                                    type="text"
+                                    className="w-full bg-[#0A0A0A] border border-[#333] p-4 rounded-xl text-white placeholder:text-gray-600 focus:outline-none focus:border-blue-500 text-center text-xl font-bold"
+                                    placeholder="My Awesome Video"
+                                    value={newProjectName}
+                                    onChange={e => setNewProjectName(e.target.value)}
+                                    onKeyDown={e => e.key === 'Enter' && handleCreateProject()}
+                                />
+                            </div>
+
+                            <div className="flex gap-4">
+                                <button
+                                    onClick={() => setShowNewProjectModal(false)}
+                                    className="flex-1 py-3 text-gray-500 hover:text-white font-bold transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleCreateProject}
+                                    disabled={isLoading}
+                                    className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-blue-900/40 flex items-center justify-center gap-2"
+                                >
+                                    {isLoading ? <Clock size={18} className="animate-spin" /> : <Plus size={18} />}
+                                    Create Project
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+        </div>
+    );
 };
 
-            export default LandingPage;
+export default LandingPage;
