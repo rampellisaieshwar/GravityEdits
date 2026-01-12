@@ -545,6 +545,17 @@ def render_project(project_data, progress_callback=None):
         if progress_callback:
             progress_callback({"status": "completed", "progress": 100, "message": "Render Complete", "url": f"/exports/{output_filename}"})
         
+        # --- NEW: Generate Subtitles ---
+        try:
+            from . import subtitle_generator
+            srt_filename = output_filename.replace('.mp4', '.srt')
+            srt_path = os.path.join(EXPORT_DIR, srt_filename)
+            subtitle_generator.generate_srt(project_data, srt_path)
+            print(f"📝 Subtitles saved to: {srt_path}")
+        except Exception as e:
+            print(f"⚠️ Subtitle generation failed: {e}")
+        # -------------------------------
+        
         # Clean up
         for c in final_clips:
             c.close()

@@ -119,7 +119,7 @@ def analyze_visuals(video_path, clips):
     return clips
 
 # --- NEW: THE BATCH PROCESSOR ---
-def process_batch_pipeline(video_paths_list, project_name="Project_01", output_dir="uploads", progress_callback=None):
+def process_batch_pipeline(video_paths_list, project_name="Project_01", output_dir="uploads", progress_callback=None, user_description=None):
     """
     Takes a LIST of videos (e.g., ['intro.mp4', 'scene.mp4'])
     and combines them into ONE Master JSON.
@@ -179,21 +179,33 @@ def process_batch_pipeline(video_paths_list, project_name="Project_01", output_d
     if progress_callback: progress_callback(90, "AI Generating Timeline (this may take a moment)...")
     output_xml_path = os.path.join(output_dir, f"{project_name}.xml")
     
-    generate_xml_edl(project_data, output_xml_path, project_name)
+    generate_xml_edl(project_data, output_xml_path, project_name, user_description)
     if progress_callback: progress_callback(100, "Done!")
     
     print(f"✅ XML EDL saved to: {output_xml_path}")
     
     return output_json_path
 
-def generate_xml_edl(project_data, output_path, project_name="Project"):
+def generate_xml_edl(project_data, output_path, project_name="Project", user_description=None):
     print("🧠 Asking Llama 3 to edit the video...")
     
+    # User instructions injection
+    user_context = ""
+    if user_description:
+        user_context = f"""
+        USER INSTRUCTIONS:
+        The user has provided the following description/context for this edit.
+        You MUST prioritize these instructions when selecting clips, style, and tone:
+        "{user_description}"
+        """
+
     # 1. Prepare Prompt
     # We strip some bulky data to keep context small if needed (but Llama 3 usually handles it)
     prompt = f"""
     You are a professional Video Editor AI. Your task is to create an EDL (Edit Decision List) in XML format based on the following analysis data of video clips.
     
+    {user_context}
+
     CRITICAL RULES:
     1. Output ONLY valid XML. No markdown, no conversation.
     2. Review the 'visual_data' and 'text' (transcription).

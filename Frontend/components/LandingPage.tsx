@@ -27,9 +27,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ onProjectLoaded, onStartUploa
 
     useEffect(() => {
         // Auto-play ambient sound
-        if (audioRef.current) {
-            audioRef.current.volume = 0.5;
-            const playPromise = audioRef.current.play();
+        const audio = audioRef.current;
+        if (audio) {
+            audio.volume = 0.5;
+            const playPromise = audio.play();
             if (playPromise !== undefined) {
                 playPromise.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
             }
@@ -37,6 +38,13 @@ const LandingPage: React.FC<LandingPageProps> = ({ onProjectLoaded, onStartUploa
 
         // Fetch Projects
         fetchProjects();
+
+        return () => {
+            if (audio) {
+                audio.pause();
+                audio.currentTime = 0;
+            }
+        };
     }, []);
 
     const fetchProjects = async () => {

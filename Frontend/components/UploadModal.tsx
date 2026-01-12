@@ -18,6 +18,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ onComplete, setProject, proje
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [analysisJobId, setAnalysisJobId] = useState<string | null>(null);
+  const [description, setDescription] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const xmlInputRef = useRef<HTMLInputElement>(null);
 
@@ -160,7 +161,8 @@ const UploadModal: React.FC<UploadModalProps> = ({ onComplete, setProject, proje
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           project_name: effectiveProjectName,
-          file_names: uploadedFiles.map(f => f.name)
+          file_names: uploadedFiles.map(f => f.name),
+          description: description
         })
       });
 
@@ -333,18 +335,31 @@ const UploadModal: React.FC<UploadModalProps> = ({ onComplete, setProject, proje
           )}
 
           {stage === 'uploaded' && (
-            <div className="flex flex-col items-center gap-8 py-6">
+            <div className="flex flex-col items-center gap-6 py-4">
               <div className="w-16 h-16 rounded-full bg-blue-500/10 flex items-center justify-center border border-blue-500/30">
                 <CheckCircle size={32} className="text-blue-500" />
               </div>
               <div className="text-center">
                 <h2 className="text-xl font-bold text-white mb-2">Upload Complete</h2>
                 <p className="text-gray-400 text-sm max-w-sm">
-                  {uploadedFiles.length} file{uploadedFiles.length !== 1 ? 's' : ''} ready. How would you like to proceed?
+                  {uploadedFiles.length} file{uploadedFiles.length !== 1 ? 's' : ''} ready.
                 </p>
               </div>
 
-              <div className="flex gap-4 w-full">
+              {/* Description Input */}
+              <div className="w-full max-w-md space-y-2">
+                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest pl-1">
+                  Describe your vision (Optional)
+                </label>
+                <textarea
+                  className="w-full bg-[#121212] border border-[#333] rounded-xl p-4 text-white text-sm focus:border-blue-500 focus:outline-none min-h-[100px] resize-none placeholder:text-gray-700"
+                  placeholder="e.g. 'Make a dynamic vlog with fast cuts', or 'Focus on the nature shots and keep it slow paced'..."
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                />
+              </div>
+
+              <div className="flex gap-4 w-full pt-2">
                 <button
                   onClick={handleManual}
                   className="flex-1 bg-[#2A2A2A] hover:bg-[#333] text-gray-200 font-bold py-4 rounded-xl text-sm transition-all border border-gray-700 hover:border-gray-500 flex flex-col items-center gap-2 group"

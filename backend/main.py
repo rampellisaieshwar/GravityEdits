@@ -265,11 +265,12 @@ def list_uploaded_audio(project_name: Optional[str] = None):
 class AnalyzeRequest(BaseModel):
     project_name: str
     file_names: List[str]
+    description: Optional[str] = None
 
 # Analysis job store
 analysis_jobs: Dict[str, Any] = {}
 
-def run_analysis_job(job_id: str, video_paths: List[str], project_name: str, output_dir: str):
+def run_analysis_job(job_id: str, video_paths: List[str], project_name: str, output_dir: str, user_description: Optional[str] = None):
     try:
         analysis_jobs[job_id]["status"] = "processing"
         # Define callback to update progress
@@ -278,7 +279,7 @@ def run_analysis_job(job_id: str, video_paths: List[str], project_name: str, out
             analysis_jobs[job_id]["message"] = message
 
         # Pass output_dir and callback to AI engine
-        ai_engine.process_batch_pipeline(video_paths, project_name, output_dir=output_dir, progress_callback=progress_callback)
+        ai_engine.process_batch_pipeline(video_paths, project_name, output_dir=output_dir, progress_callback=progress_callback, user_description=user_description)
         analysis_jobs[job_id]["status"] = "completed"
         analysis_jobs[job_id]["progress"] = 100
     except Exception as e:
@@ -327,7 +328,7 @@ async def analyze_project(request: AnalyzeRequest, background_tasks: BackgroundT
     analysis_jobs[job_id] = {"status": "queued", "progress": 0, "message": "Queued"}
     
     print(f"DEBUG: Starting Analysis Job {job_id} with paths: {video_paths}")
-    background_tasks.add_task(run_analysis_job, job_id, video_paths, request.project_name, output_dir)
+    background_tasks.add_task(run_analysis_job, job_id, video_paths, request.project_name, output_dir, request.description)
     
     return {"status": "queued", "job_id": job_id, "message": "AI Analysis started"}
 
@@ -389,12 +390,20 @@ class ChatRequest(BaseModel):
 @app.post("/chat/")
 async def chat_with_ai(request: ChatRequest):
     context = None
+    project_path = None
+    
+    # Determine Project Path and Context
     if request.project_name:
-         # Try project dir then legacy
+         # Standard Project Path
          p_path = get_project_path(request.project_name)
+         project_path = p_path
+         
          analysis_path = os.path.join(p_path, f"{request.project_name}_analysis.json")
+         # Legacy fallback
          if not os.path.exists(analysis_path):
-             analysis_path = os.path.join(UPLOAD_DIR, f"{request.project_name}_analysis.json")
+             legacy_path = os.path.join(UPLOAD_DIR, f"{request.project_name}_analysis.json")
+             if os.path.exists(legacy_path):
+                 analysis_path = legacy_path
              
          if os.path.exists(analysis_path):
              try:
@@ -402,8 +411,13 @@ async def chat_with_ai(request: ChatRequest):
                      context = json.load(f)
              except Exception as e:
                  print(f"Failed to load analysis for chat context: {e}")
-                 
-    response = chat_engine.chat(request.query, context)
+    else:
+        # Default global chat
+        project_path = os.path.join(PROJECTS_DIR, "_global_chat")
+
+    # Delegate to Chat Engine (handles LangChain history internally)
+    response = chat_engine.chat(request.query, context, project_path=project_path)
+    
     return {"response": response}
 
 if __name__ == "__main__":

@@ -339,11 +339,24 @@ const App: React.FC = () => {
     setProject({
       ...baseProject,
       name: `${baseProject.name} [${short.title}]`,
-      edl: shortClips
+      edl: shortClips,
+      overlays: [], // Clear main video overlays for the short
+      audioClips: [], // Optionally clear secondary audio if not relevant
+      bgMusic: undefined // Optionally clear Bg music or keep it? varied choice, usually shorts need new music. Let's clear for clean slate.
     });
 
     setIsPlaying(false);
     setCurrentTime(0);
+  };
+
+  const handleExitShortMode = () => {
+    if (originalProject) {
+      setProject(originalProject);
+      setOriginalProject(null);
+      setCurrentProjectName(originalProject.name);
+      setIsPlaying(false);
+      setCurrentTime(0);
+    }
   };
 
   // Resize Handlers
@@ -505,6 +518,20 @@ const App: React.FC = () => {
             <button onClick={() => setView('color')} className={`px-3 py-1 rounded flex items-center gap-1.5 transition-all ${view === 'color' ? 'text-blue-400 bg-[#333]' : 'text-gray-500 hover:text-gray-200'}`}><Palette size={12} />Color</button>
           </nav>
         </div>
+
+        {/* Center: Back Button when in Short Mode */}
+        {originalProject && (
+          <div className="absolute left-1/2 -translate-x-1/2">
+            <button
+              onClick={handleExitShortMode}
+              className="bg-yellow-500/10 border border-yellow-500/50 text-yellow-500 px-4 py-1 rounded-full text-xs font-bold uppercase hover:bg-yellow-500/20 transition-all flex items-center gap-2 animate-pulse"
+            >
+              <span>Editing Viral Short</span>
+              <span className="bg-yellow-500 text-black px-1.5 rounded-sm">EXIT</span>
+            </button>
+          </div>
+        )}
+
         <div className="flex items-center gap-3">
           <button className="flex items-center gap-2 bg-[#2A2A2A] hover:bg-[#333] px-3 py-1 rounded text-[10px] font-bold uppercase transition-colors">
             <Settings size={12} /> Project Configuration
