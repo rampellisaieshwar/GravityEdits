@@ -119,7 +119,7 @@ def analyze_visuals(video_path, clips):
     return clips
 
 # --- NEW: THE BATCH PROCESSOR ---
-def process_batch_pipeline(video_paths_list, project_name="Project_01", output_dir="uploads", progress_callback=None, user_description=None):
+def process_batch_pipeline(video_paths_list, project_name="Project_01", output_dir="uploads", progress_callback=None, user_description=None, api_key=None):
     """
     Takes a LIST of videos (e.g., ['intro.mp4', 'scene.mp4'])
     and combines them into ONE Master JSON.
@@ -179,14 +179,14 @@ def process_batch_pipeline(video_paths_list, project_name="Project_01", output_d
     if progress_callback: progress_callback(90, "AI Generating Timeline (this may take a moment)...")
     output_xml_path = os.path.join(output_dir, f"{project_name}.xml")
     
-    generate_xml_edl(project_data, output_xml_path, project_name, user_description)
+    generate_xml_edl(project_data, output_xml_path, project_name, user_description, api_key=api_key)
     if progress_callback: progress_callback(100, "Done!")
     
     print(f"✅ XML EDL saved to: {output_xml_path}")
     
     return output_json_path
 
-def generate_xml_edl(project_data, output_path, project_name="Project", user_description=None):
+def generate_xml_edl(project_data, output_path, project_name="Project", user_description=None, api_key=None):
     print("🧠 Asking Llama 3 to edit the video...")
     
     # User instructions injection
@@ -299,7 +299,15 @@ def generate_xml_edl(project_data, output_path, project_name="Project", user_des
         elif llm_config.LLM_PROVIDER == "gemini":
             try:
                 import google.generativeai as genai
-                genai.configure(api_key=llm_config.GEMINI_API_KEY)
+                
+                # Determine Key (User > Config > None)
+                key_to_use = api_key if api_key else llm_config.GEMINI_API_KEY
+                
+                if not key_to_use:
+                    print("⚠️ No Gemini API Key provided. Cannot run AI analysis.")
+                    raise Exception("Missing Gemini API Key")
+
+                genai.configure(api_key=key_to_use)
                 
                 model = genai.GenerativeModel(
                     llm_config.LLM_MODEL,
@@ -308,6 +316,7 @@ def generate_xml_edl(project_data, output_path, project_name="Project", user_des
                     )
                 )
                 
+                # ... same generation logic ...
                 response = model.generate_content(prompt)
                 llm_output = response.text.strip()
                 

@@ -22,18 +22,10 @@ except ImportError as e:
 
 class ChatEngine:
     def __init__(self):
-        self.llm = None
-        if LANGCHAIN_AVAILABLE and llm_config.LLM_PROVIDER == "gemini":
-            try:
-                self.llm = ChatGoogleGenerativeAI(
-                    model=llm_config.LLM_MODEL,
-                    google_api_key=llm_config.GEMINI_API_KEY,
-                    temperature=llm_config.DEFAULT_TEMPERATURE
-                )
-            except Exception as e:
-                print(f"Failed to init Gemini: {e}")
+        # Stateless now. We init LLM per request.
+        pass
         
-    def generate_response(self, query: str, context: dict = None, project_id: str = None, history: list = None, project_path: str = None):
+    def generate_response(self, query: str, context: dict = None, project_id: str = None, history: list = None, project_path: str = None, api_key: str = None):
         """
         Generates a response using LangChain (if available) or falls back to legacy.
         
@@ -43,14 +35,15 @@ class ChatEngine:
             project_id (str): Optional. Used to track conversation history per project.
             history (list): Legacy list of previous messages (Not used if LangChain is active).
             project_path (str): Path to the project directory for storing history files.
+            api_key (str): Optional. User provided API key.
         """
         
         # 1. Build System Prompt
         system_prompt_content = self._build_system_prompt(context)
         
         # 2. Use LangChain if applicable
-        if self.llm and project_path:
-            return self._generate_with_langchain(query, system_prompt_content, project_path)
+        if LANGCHAIN_AVAILABLE and project_path and llm_config.LLM_PROVIDER == "gemini":
+            return self._generate_with_langchain(query, system_prompt_content, project_path, api_key)
             
         # 3. Fallback to Legacy (Ollama or Manual History)
         # Construct messages manually
@@ -61,8 +54,20 @@ class ChatEngine:
         
         return self._call_legacy_llm(messages)
 
-    def _generate_with_langchain(self, query, system_prompt_content, project_path):
+    def _generate_with_langchain(self, query, system_prompt_content, project_path, api_key=None):
         try:
+            # Determine Key
+            key_to_use = api_key if api_key else llm_config.GEMINI_API_KEY
+            if not key_to_use:
+                return "Error: No API Key provided. Please set your Gemini API Key in settings."
+
+            # Init LLM Just-In-Time
+            llm = ChatGoogleGenerativeAI(
+                model=llm_config.LLM_MODEL,
+                google_api_key=key_to_use,
+                temperature=llm_config.DEFAULT_TEMPERATURE
+            )
+            
             # Ensure history file exists
             if not os.path.exists(project_path):
                 os.makedirs(project_path, exist_ok=True)
@@ -81,7 +86,7 @@ class ChatEngine:
             ])
             
             # Create Chain
-            chain = prompt | self.llm
+            chain = prompt | llm
             
             # Retrieve previous messages
             previous_messages = history_store.messages
@@ -170,5 +175,5 @@ class ChatEngine:
 # Singleton instance
 engine = ChatEngine()
 
-def chat(query, context=None, history=None, project_path=None):
-    return engine.generate_response(query, context, history=history, project_path=project_path)
+def chat(query, context=None, history=None, project_path=None, api_key=None):
+    return engine.generate_response(query, context, history=history, project_path=project_path, api_key=api_key)

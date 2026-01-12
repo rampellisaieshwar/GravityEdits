@@ -114,6 +114,7 @@ const Sidebar: React.FC<SidebarProps> = ({ project, tab, setTab, onSelectClip, o
     setIsAiProcessing(true);
 
     try {
+      const apiKey = localStorage.getItem("gravity_api_key");
       const response = await fetch(`${API_BASE_URL}/chat/`, {
         method: 'POST',
         headers: {
@@ -121,7 +122,8 @@ const Sidebar: React.FC<SidebarProps> = ({ project, tab, setTab, onSelectClip, o
         },
         body: JSON.stringify({
           query: userMsg.content,
-          project_name: project?.name || null
+          project_name: project?.name || null,
+          api_key: apiKey
         }),
       });
 

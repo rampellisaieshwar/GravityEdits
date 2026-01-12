@@ -14,9 +14,10 @@ LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini")
 LLM_MODEL = os.getenv("LLM_MODEL", "gemini-2.0-flash")
 
 # Connection Settings
+# Connection Settings
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyA0WmaZNdg8pz8YD-Np1lYHQa2FMg40fUo")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 # Generation Settings
 DEFAULT_TEMPERATURE = 0.7

@@ -266,20 +266,19 @@ class AnalyzeRequest(BaseModel):
     project_name: str
     file_names: List[str]
     description: Optional[str] = None
+    api_key: Optional[str] = None
 
 # Analysis job store
 analysis_jobs: Dict[str, Any] = {}
 
-def run_analysis_job(job_id: str, video_paths: List[str], project_name: str, output_dir: str, user_description: Optional[str] = None):
+def run_analysis_job(job_id: str, video_paths: List[str], project_name: str, output_dir: str, user_description: Optional[str] = None, api_key: str = None):
     try:
         analysis_jobs[job_id]["status"] = "processing"
-        # Define callback to update progress
         def progress_callback(progress, message):
             analysis_jobs[job_id]["progress"] = progress
             analysis_jobs[job_id]["message"] = message
 
-        # Pass output_dir and callback to AI engine
-        ai_engine.process_batch_pipeline(video_paths, project_name, output_dir=output_dir, progress_callback=progress_callback, user_description=user_description)
+        ai_engine.process_batch_pipeline(video_paths, project_name, output_dir=output_dir, progress_callback=progress_callback, user_description=user_description, api_key=api_key)
         analysis_jobs[job_id]["status"] = "completed"
         analysis_jobs[job_id]["progress"] = 100
     except Exception as e:
@@ -292,7 +291,6 @@ def run_analysis_job(job_id: str, video_paths: List[str], project_name: str, out
 async def analyze_project(request: AnalyzeRequest, background_tasks: BackgroundTasks):
     # Determine paths based on whether project exists in new structure
     project_path = get_project_path(request.project_name)
-    
     
     # Force output to project directory
     if not os.path.exists(project_path):
@@ -328,7 +326,7 @@ async def analyze_project(request: AnalyzeRequest, background_tasks: BackgroundT
     analysis_jobs[job_id] = {"status": "queued", "progress": 0, "message": "Queued"}
     
     print(f"DEBUG: Starting Analysis Job {job_id} with paths: {video_paths}")
-    background_tasks.add_task(run_analysis_job, job_id, video_paths, request.project_name, output_dir, request.description)
+    background_tasks.add_task(run_analysis_job, job_id, video_paths, request.project_name, output_dir, request.description, api_key=request.api_key)
     
     return {"status": "queued", "job_id": job_id, "message": "AI Analysis started"}
 
@@ -386,6 +384,7 @@ async def get_export_status(job_id: str):
 class ChatRequest(BaseModel):
     query: str
     project_name: str = None
+    api_key: Optional[str] = None
     
 @app.post("/chat/")
 async def chat_with_ai(request: ChatRequest):
@@ -416,9 +415,10 @@ async def chat_with_ai(request: ChatRequest):
         project_path = os.path.join(PROJECTS_DIR, "_global_chat")
 
     # Delegate to Chat Engine (handles LangChain history internally)
-    response = chat_engine.chat(request.query, context, project_path=project_path)
+    response = chat_engine.chat(request.query, context, project_path=project_path, api_key=request.api_key)
     
     return {"response": response}
+
 
 if __name__ == "__main__":
     import uvicorn

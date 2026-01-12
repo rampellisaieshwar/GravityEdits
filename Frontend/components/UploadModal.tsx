@@ -153,6 +153,14 @@ const UploadModal: React.FC<UploadModalProps> = ({ onComplete, setProject, proje
   };
 
   const handleAnalyze = async () => {
+    const apiKey = localStorage.getItem("gravity_api_key");
+    if (!apiKey) {
+      // Trigger global settings modal
+      window.dispatchEvent(new Event("openAPISettings"));
+      alert("Please provide an API Key in Settings to proceed with AI Analysis.");
+      return;
+    }
+
     setStage('processing');
     setProgress(5);
     try {
@@ -162,7 +170,8 @@ const UploadModal: React.FC<UploadModalProps> = ({ onComplete, setProject, proje
         body: JSON.stringify({
           project_name: effectiveProjectName,
           file_names: uploadedFiles.map(f => f.name),
-          description: description
+          description: description,
+          api_key: apiKey // Pass the key!
         })
       });
 
