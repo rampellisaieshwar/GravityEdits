@@ -267,55 +267,72 @@ const LandingPage: React.FC<LandingPageProps> = ({ onProjectLoaded, onStartUploa
                     <Music size={14} className={isPlaying ? "animate-pulse text-blue-500" : ""} />
                     {isPlaying ? "Sound On" : "Sound Off"}
                 </button>
-            </div>
 
-            {/* New Project Modal */}
-            <AnimatePresence>
-                {showNewProjectModal && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setShowNewProjectModal(false)}>
-                        <motion.div
-                            initial={{ scale: 0.9, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            exit={{ scale: 0.9, opacity: 0 }}
-                            onClick={(e) => e.stopPropagation()}
-                            className="bg-[#151515] border border-[#333] p-8 rounded-2xl max-w-md w-full shadow-2xl space-y-6"
-                        >
-                            <h2 className="text-2xl font-bold text-center text-white">Name Your Project</h2>
-
-                            <div className="space-y-2">
-                                <input
-                                    autoFocus
-                                    type="text"
-                                    className="w-full bg-[#0A0A0A] border border-[#333] p-4 rounded-xl text-white placeholder:text-gray-600 focus:outline-none focus:border-blue-500 text-center text-xl font-bold"
-                                    placeholder="My Awesome Video"
-                                    value={newProjectName}
-                                    onChange={e => setNewProjectName(e.target.value)}
-                                    onKeyDown={e => e.key === 'Enter' && handleCreateProject()}
-                                />
-                            </div>
-
-                            <div className="flex gap-4">
-                                <button
-                                    onClick={() => setShowNewProjectModal(false)}
-                                    className="flex-1 py-3 text-gray-500 hover:text-white font-bold transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    onClick={handleCreateProject}
-                                    disabled={isLoading}
-                                    className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-blue-900/40 flex items-center justify-center gap-2"
-                                >
-                                    {isLoading ? <Clock size={18} className="animate-spin" /> : <Plus size={18} />}
-                                    Create Project
-                                </button>
-                            </div>
-                        </motion.div>
+                {/* Profile / Settings Button */}
+                <button
+                    onClick={() => window.dispatchEvent(new Event('openAPISettings'))}
+                    className="fixed top-8 right-8 flex items-center gap-3 bg-[#111] hover:bg-[#1A1A1A] border border-white/10 hover:border-white/30 pl-1 pr-4 py-1.5 rounded-full transition-all group z-50 cursor-pointer"
+                >
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black border border-white/10 ${typeof window !== 'undefined' && localStorage.getItem('gravity_api_key') ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-900/50' : 'bg-gray-800 text-gray-400'}`}>
+                        {typeof window !== 'undefined' && localStorage.getItem('gravity_api_key') ? 'JS' : '?'}
                     </div>
-                )}
-            </AnimatePresence>
-        </div>
-    );
+                    <div className="text-left">
+                        <span className="block text-[10px] uppercase font-bold text-gray-400 group-hover:text-blue-400 transition-colors tracking-wider">
+                            {typeof window !== 'undefined' && localStorage.getItem('gravity_api_key') ? 'Profile Active' : 'Setup Profile'}
+                        </span>
+                        <span className="block text-[9px] text-gray-600">
+                            {typeof window !== 'undefined' && localStorage.getItem('gravity_llm_provider') === 'openai' ? 'OpenAI GPT-4' : 'Google Gemini'}
+                        </span>
+                    </div>
+                </button>
+
+                {/* New Project Modal */}
+                <AnimatePresence>
+                    {showNewProjectModal && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setShowNewProjectModal(false)}>
+                            <motion.div
+                                initial={{ scale: 0.9, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0.9, opacity: 0 }}
+                                onClick={(e) => e.stopPropagation()}
+                                className="bg-[#151515] border border-[#333] p-8 rounded-2xl max-w-md w-full shadow-2xl space-y-6"
+                            >
+                                <h2 className="text-2xl font-bold text-center text-white">Name Your Project</h2>
+
+                                <div className="space-y-2">
+                                    <input
+                                        autoFocus
+                                        type="text"
+                                        className="w-full bg-[#0A0A0A] border border-[#333] p-4 rounded-xl text-white placeholder:text-gray-600 focus:outline-none focus:border-blue-500 text-center text-xl font-bold"
+                                        placeholder="My Awesome Video"
+                                        value={newProjectName}
+                                        onChange={e => setNewProjectName(e.target.value)}
+                                        onKeyDown={e => e.key === 'Enter' && handleCreateProject()}
+                                    />
+                                </div>
+
+                                <div className="flex gap-4">
+                                    <button
+                                        onClick={() => setShowNewProjectModal(false)}
+                                        className="flex-1 py-3 text-gray-500 hover:text-white font-bold transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleCreateProject}
+                                        disabled={isLoading}
+                                        className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-blue-900/40 flex items-center justify-center gap-2"
+                                    >
+                                        {isLoading ? <Clock size={18} className="animate-spin" /> : <Plus size={18} />}
+                                        Create Project
+                                    </button>
+                                </div>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
+            </div>
+            );
 };
 
-export default LandingPage;
+            export default LandingPage;
