@@ -215,8 +215,9 @@ def generate_xml_edl(project_data, output_path, project_name="Project", user_des
     6. YOU MUST INCLUDE ALL CLIPS from the input, even if you mark them as keep="false". Do not filter any clips out.
     7. Maintain the exact 'id', 'source', 'start', 'end' from input.
     8. CALCULATE DURATION: duration must be exactly (end - start). Do not output "..." or "unknown".
-    9. You MUST include a 'reason' attribute for EVERY <clip> tag, explaining why it was kept or rejected. Be specific (e.g., "Good lighting and clear audio", "Too dark", "Engaging hook"). This is required for the Inspector UI.
-    10. SUGGEST COLOR GRADING: For the project globally and for each clip, suggest color grading settings based on the mood.
+    9. You MUST include a 'reason' attribute for EVERY <clip> tag, explaining why it was kept or rejected.
+    10. CRITICAL: You MUST include the 'text' attribute containing the transcription. Escape double quotes if needed.
+    11. SUGGEST COLOR GRADING: For the project globally and for each clip, suggest color grading settings based on the mood.
        - brightness/exposure: -5.0 to 5.0 (default 0)
        - contrast: -100 to 100 (default 0)
     11. VIRAL SHORTS: Identification of 1-3 potential "Viral Shorts" from the footage.
@@ -224,7 +225,6 @@ def generate_xml_edl(project_data, output_path, project_name="Project", user_des
        - These should be separate from the main EDL.
        - Provide a 'title' and 'description' for the short.
        - List the 'clip_ids' that make up this short (comma separated).
-        - List the 'clip_ids' that make up this short (comma separated).
     12. TEXT OVERLAYS: Analyze the ENTIRE transcript to understand the structure.
        - Generate text overlays ONLY for MAJOR TOPIC CHANGES or SECTION HEADERS.
        - Do NOT highlight random words. Only label the start of a new idea or chapter.
@@ -359,7 +359,8 @@ def generate_xml_edl(project_data, output_path, project_name="Project", user_des
              keep = "false"
              reason = "Too dark (Manual)"
              
-        edl_content += f'    <clip id="{clip.get("id")}" source="{clip.get("source_video")}" start="{clip.get("start")}" end="{clip.get("end")}" keep="{keep}" reason="{reason}" duration="{clip.get("end") - clip.get("start")}">\n'
+        escaped_text = clip.get("text", "").replace('"', "'")
+        edl_content += f'    <clip id="{clip.get("id")}" source="{clip.get("source_video")}" start="{clip.get("start")}" end="{clip.get("end")}" keep="{keep}" reason="{reason}" text="{escaped_text}" duration="{clip.get("end") - clip.get("start")}">\n'
         edl_content += '      <color_grading>\n        <temperature>5600</temperature>\n        <exposure>0</exposure>\n        <contrast>0</contrast>\n        <saturation>100</saturation>\n        <filter_strength>100</filter_strength>\n      </color_grading>\n'
         edl_content += '    </clip>\n'
         

@@ -28,7 +28,8 @@ def generate_srt(project_data, output_path):
     print(f"📝 Generating Subtitles -> {output_path}")
     
     clips_list = project_data.get('edl', project_data.get('clips', []))
-    
+    print(f"DEBUG: Found {len(clips_list)} clips for subtitles.")
+
     srt_content = ""
     subtitle_index = 1
     current_time = 0.0
@@ -39,11 +40,18 @@ def generate_srt(project_data, output_path):
         if isinstance(keep_val, str) and keep_val.lower() == 'false':
              keep_val = False
         
+        # DEBUG
+        text = clip.get('text', '').strip()
+        print(f"DEBUG: Clip {clip.get('id')} - keep={keep_val}, text_len={len(text)}")
+
         if not keep_val:
+            # print(f"Skipping Clip {clip.get('id')} (keep=False)")
             continue
+        
+        # print(f"Processing Clip {clip.get('id')} (metrics: {duration}s)")
             
         # 2. Get Text Content
-        text = clip.get('text', '').strip()
+        # text already fetched above for debug
         if not text:
             # Even if no text, we must advance time!
             # But we don't write an empty subtitle entry usually.

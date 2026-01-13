@@ -89,24 +89,20 @@ const App: React.FC = () => {
           if (res.ok) return res.text();
           throw new Error('No EDL');
         })
-        .then(xml => {
-          const proj = parseEDLXml(xml);
+        .then(async (xml) => {
+          let meta = null;
+          try {
+            const mRes = await fetch(`${API_BASE_URL}/api/projects/${savedName}/analysis`);
+            if (mRes.ok) meta = await mRes.json();
+          } catch (e) {
+            console.warn("Analysis load failed", e);
+          }
+
+          const proj = parseEDLXml(xml, meta);
           if (proj) {
-            // Fetch metadata to complete the project object if needed
-            fetch(`${API_BASE_URL}/api/projects/${savedName}/analysis`)
-              .then(r => r.json())
-              .then(meta => {
-                // Merge? For now just use EDL
-                // We need to ensure project name is set from folder or XML
-                proj.name = savedName;
-                setProject(proj);
-                setAppMode('editor');
-              })
-              .catch(() => {
-                proj.name = savedName;
-                setProject(proj);
-                setAppMode('editor');
-              });
+            proj.name = savedName;
+            setProject(proj);
+            setAppMode('editor');
           }
         })
         .catch(() => {

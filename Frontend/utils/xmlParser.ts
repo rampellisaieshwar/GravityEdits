@@ -76,6 +76,7 @@ export const parseEDLXml = (xmlString: string, metadata?: any): VideoProject => 
       source: node.getAttribute('source') || 'Unknown Source',
       keep: node.getAttribute('keep') === 'true',
       reason: node.getAttribute('reason') || 'No reason provided',
+      text: node.getAttribute('text') || meta?.text || '',
       start,
       end,
       emotionScore: Math.floor(Math.random() * 40) + 60,

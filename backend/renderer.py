@@ -21,7 +21,7 @@ except ImportError:
             new_clip = concatenate_audioclips(clips)
             
             if duration is not None:
-                new_clip = new_clip.subclip(0, duration)
+                new_clip = new_clip.subclipped(0, duration)
             return new_clip
 
 # Ensure concatenate_audioclips is available if we used it above, but also for general use
@@ -60,8 +60,19 @@ def create_motion_text(content, duration=2.0, style='pop', fontsize=70, color='w
         
         # We use a stroke to make it pop. Font might need to be available specifically or generic 'Arial'
         # method='caption' or 'label'. 'label' is usually safer for simple text.
-        txt = TextClip(content, fontsize=effective_fontsize, color=color, stroke_color='black', stroke_width=2, method='label', font=font)
-        txt = txt.set_duration(duration)
+        try:
+            txt = TextClip(text=content, font_size=effective_fontsize, color=color, stroke_color='black', stroke_width=2, method='label', font=font)
+        except Exception as e1:
+            print(f"⚠️ Primary font '{font}' failed: {e1}")
+            try:
+                # Fallback 1: Arial
+                txt = TextClip(text=content, font_size=effective_fontsize, color=color, stroke_color='black', stroke_width=2, method='label', font='Arial')
+            except Exception as e2:
+                 print(f"⚠️ Fallback font 'Arial' failed: {e2}")
+                 # Fallback 2: System Default (no font arg)
+                 txt = TextClip(text=content, font_size=effective_fontsize, color=color, method='label')
+
+        txt = txt.with_duration(duration)
         
         # 1. Custom Position (Overrides Style)
         if pos is not None:
@@ -69,7 +80,7 @@ def create_motion_text(content, duration=2.0, style='pop', fontsize=70, color='w
             # MoviePy set_position uses Top-Left by default for relative. 
             # To strictly center, we'd need to know video size, which we don't here.
             # Best approximation: Use relative position (Top-Left) for now.
-            txt = txt.set_position(pos, relative=True)
+            txt = txt.with_position(pos, relative=True)
             
             # If style is fade, we still apply fade effect
             if style == 'fade':
@@ -80,21 +91,23 @@ def create_motion_text(content, duration=2.0, style='pop', fontsize=70, color='w
         # 2. Style-based Defaults
         if style == 'slide_up':
             # Position: start at bottom, move to center? Or just center (simple)
-            txt = txt.set_position(('center', 0.8), relative=True) 
+            txt = txt.with_position(('center', 0.8), relative=True) 
         elif style == 'fade':
             # Fade in and out
-            txt = txt.set_position('center')
+            txt = txt.with_position('center')
             txt = txt.crossfadein(0.5).crossfadeout(0.5)
         elif style == 'typewriter':
             # Map typewriter to bottom left for now
-            txt = txt.set_position(('left', 'bottom'))
+            txt = txt.with_position(('left', 'bottom'))
         else:
              # Pop / Center
-            txt = txt.set_position('center')
+            txt = txt.with_position('center')
             
         return txt
     except Exception as e:
-        print(f"Error creating TextClip (ImageMagick might be missing): {e}")
+        print(f"❌ Error creating TextClip (Final): {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
@@ -285,9 +298,6 @@ def render_project(project_data, progress_callback=None):
                 continue
                 
             source_name = clip_data['source']
-            # Handle full path or filename
-            source_path = os.path.join(UPLOAD_DIR, os.path.basename(source_name))
-            
             if progress_callback:
                 progress_callback({
                     "status": "processing", 
@@ -296,6 +306,44 @@ def render_project(project_data, progress_callback=None):
                 })
             
             try:
+                # A. Resolve Source Path
+                # Priority 1: Uploads folder (Legacy)
+                source_path = os.path.join(UPLOAD_DIR, os.path.basename(source_name))
+                
+                # Priority 2: Project Specific Folder
+                if not os.path.exists(source_path):
+                     p_name = project_data.get('name', '')
+                     # Try exact name
+                     safe_name = "".join(c for c in p_name if c.isalnum() or c in (' ', '_', '-')).strip()
+                     project_media_path = os.path.join("projects", safe_name, "source_media", os.path.basename(source_name))
+                     
+                     if os.path.exists(project_media_path):
+                         source_path = project_media_path
+                     else:
+                         # Try heuristic for Shorts (e.g. "LateShow_Short1" -> "LateShow")
+                         parts = safe_name.split('_')
+                         if len(parts) > 1:
+                             base_name = parts[0]
+                             heuristic_path = os.path.join("projects", base_name, "source_media", os.path.basename(source_name))
+                             if os.path.exists(heuristic_path):
+                                 source_path = heuristic_path
+                
+                # Priority 3: Absolute Fallback (for testing)
+                if not os.path.exists(source_path):
+                    abs_fallback = os.path.join("/Users/saieshwarrampelli/Downloads/GravityEdits/source_media", os.path.basename(source_name))
+                    if os.path.exists(abs_fallback):
+                        source_path = abs_fallback
+                    
+                    # Priority 4: Search blindly in projects dir? (Too slow/risky)
+                    
+                    # Heuristic: If source_name has no extension, try adding .mp4 or .mov
+                    if not os.path.exists(source_path) and '.' not in source_name:
+                        for ext in ['.mp4', '.mov', '.mkv']:
+                            test_path = source_path + ext
+                            if os.path.exists(test_path):
+                                source_path = test_path
+                                break
+
                 if not os.path.exists(source_path):
                      print(f"⚠️ Source file missing: {source_path}")
                      continue
@@ -373,7 +421,7 @@ def render_project(project_data, progress_callback=None):
                      # 2. Resize to 1080x1920 (Standard HD Shorts)
                      # Check if resize is needed to avoid unnecessary processing
                      if cut_clip.size != (1080, 1920):
-                        cut_clip = cut_clip.resize((1080, 1920))
+                        cut_clip = cut_clip.resized((1080, 1920))
 
                 final_clips.append(cut_clip)
                 
@@ -430,7 +478,7 @@ def render_project(project_data, progress_callback=None):
                     # Create Text Clip
                     txt = create_motion_text(content, duration=dur, style=style, fontsize_mult=mult, pos=custom_pos, color=t_color, font=font_fam)
                     if txt:
-                        txt = txt.set_start(start)
+                        txt = txt.with_start(start)
                         overlay_clips.append(txt)
                 except Exception as e:
                     print(f"Failed to add overlay {overlay}: {e}")
@@ -466,7 +514,7 @@ def render_project(project_data, progress_callback=None):
                     
                     # Handle volume
                     vol = float(bg_music_config.get('volume', 0.5))
-                    bg_music = bg_music.volumex(vol)
+                    bg_music = bg_music.multiply_volume(vol)
                     
                     # Handle Start Time & Duration
                     # If this is the "Legacy" bgMusic track that is now draggable:
@@ -484,7 +532,7 @@ def render_project(project_data, progress_callback=None):
                         if bg_music.duration < dur:
                              bg_music = audio_loop(bg_music, duration=dur)
                         else:
-                             bg_music = bg_music.subclip(0, dur)
+                             bg_music = bg_music.subclipped(0, dur)
                     else:
                         # Legacy Loop Mode: Fill entire video
                         # Calculate remaining time from start
@@ -492,10 +540,9 @@ def render_project(project_data, progress_callback=None):
                         if bg_music.duration < remaining_dur:
                             bg_music = audio_loop(bg_music, duration=remaining_dur)
                         else:
-                            bg_music = bg_music.subclip(0, remaining_dur)
+                            bg_music = bg_music.subclipped(0, remaining_dur)
 
-                    # Set Start Time
-                    bg_music = bg_music.set_start(bg_start)
+                    bg_music = bg_music.with_start(bg_start)
                     
                     audio_layers.append(bg_music)
             except Exception as e:
@@ -546,9 +593,9 @@ def render_project(project_data, progress_callback=None):
                         
                         target_dur = float(user_duration) if user_duration else sfx_clip.duration
                         if target_dur < sfx_clip.duration:
-                             sfx_clip = sfx_clip.subclip(0, target_dur)
+                             sfx_clip = sfx_clip.subclipped(0, target_dur)
                         
-                        sfx_clip = sfx_clip.set_start(start_time)
+                        sfx_clip = sfx_clip.with_start(start_time)
                         
                         # Clip if goes beyond video?
                         # if start_time + sfx_clip.duration > final_video.duration:
@@ -561,7 +608,7 @@ def render_project(project_data, progress_callback=None):
         # Mix all
         if len(audio_layers) > 0:
              final_audio = CompositeAudioClip(audio_layers)
-             final_video = final_video.set_audio(final_audio)
+             final_video = final_video.with_audio(final_audio)
         
         # F. Export to MP4
         timestamp = int(time.time())

@@ -398,6 +398,12 @@ const Timeline: React.FC<TimelineProps> = ({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [isScrubbing, setIsScrubbing] = useState(false);
   const [activeTool, setActiveTool] = useState<'select' | 'razor'>('select');
+  const [showApprovedOnly, setShowApprovedOnly] = useState(false);
+
+  const displayProject = React.useMemo(() => {
+    if (!showApprovedOnly) return project;
+    return { ...project, edl: project.edl.filter(c => c.keep) };
+  }, [project, showApprovedOnly]);
 
   const calculateTimeFromEvent = (e: React.MouseEvent | MouseEvent) => {
     if (!scrollContainerRef.current) return 0;
@@ -498,7 +504,15 @@ const Timeline: React.FC<TimelineProps> = ({
             {new Date(currentTime * 1000).toISOString().substr(11, 8)}:00
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          <button
+            onClick={() => setShowApprovedOnly(!showApprovedOnly)}
+            className={`text-[10px] px-2 py-1 rounded border transition-colors ${showApprovedOnly ? 'bg-green-900/40 text-green-300 border-green-500/50' : 'bg-[#2A2A2A] text-gray-400 border-transparent hover:text-white'}`}
+            title="Toggle showing only approved clips"
+          >
+            {showApprovedOnly ? 'Approved Only' : 'All Clips'}
+          </button>
+          <div className="w-[1px] h-4 bg-[#333] mx-1"></div>
           <button className="text-[10px] text-gray-400 hover:text-white bg-[#2A2A2A] px-2 py-1 rounded">V1</button>
           <button className="text-[10px] text-gray-400 hover:text-white bg-[#2A2A2A] px-2 py-1 rounded">A1</button>
           <button
@@ -636,9 +650,8 @@ const Timeline: React.FC<TimelineProps> = ({
             ))}
           </div>
 
-          {/* Tracks Area - Memoized */}
           <TimelineTracks
-            project={project}
+            project={displayProject}
             zoom={zoom}
             selectedClipId={selectedClipId}
             selectedOverlayId={selectedOverlayId}

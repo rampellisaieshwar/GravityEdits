@@ -149,7 +149,11 @@ const Sidebar: React.FC<SidebarProps> = ({ project, tab, setTab, onSelectClip, o
       <div className="p-3 flex items-center justify-between border-b border-white/5 shrink-0">
         <div className="flex gap-1 items-center">
           <button
-            onClick={onBack}
+            onClick={() => {
+              if (window.confirm("Are you sure you want to go back? Your unsaved edits regarding the project state in memory will be lost unless you saved the JSON.")) {
+                onBack();
+              }
+            }}
             title="Back to Dashboard"
             className="mr-2 p-1 text-gray-400 hover:text-white hover:bg-white/10 rounded transition-colors"
           >

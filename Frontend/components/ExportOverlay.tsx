@@ -101,12 +101,14 @@ const ExportOverlay: React.FC<ExportOverlayProps> = ({ onClose, project, initial
             keep: c.keep,
             start: c.start || 0,
             end: c.end || 0,
+            text: c.text,
             // Pass clip-specific color grading
             colorGrading: c.colorGrading
           })),
           // Include Background Music and Secondary Audio Chips
           bgMusic: project.bgMusic,
-          audioClips: project.audioClips
+          audioClips: project.audioClips,
+          overlays: project.overlays
         }
       };
 

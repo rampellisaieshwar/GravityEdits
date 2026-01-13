@@ -8,6 +8,7 @@ export interface Clip {
   duration?: number;
   start?: number;
   end?: number;
+  text?: string;
   colorGrading?: {
     temperature: number;
     exposure: number;

@@ -366,6 +366,21 @@ async def export_video(request: ExportRequest, background_tasks: BackgroundTasks
             job_id = str(uuid.uuid4())
             render_jobs[job_id] = {"status": "queued", "progress": 0, "message": "Queued"}
             
+            # DEBUG: Log payload to verify 'text' field
+            try:
+                debug_path = os.path.join(os.getcwd(), "debug_payload.log")
+                with open(debug_path, "w") as f:
+                    clips = request.project.get('clips', [])
+                    f.write(f"Export Request for {request.project.get('name')}\n")
+                    f.write(f"Total Clips: {len(clips)}\n")
+                    f.write(f"Total Overlays: {len(request.project.get('overlays', []))}\n")
+                    if clips:
+                        first_clip = clips[0]
+                        f.write(f"First Clip Sample: {first_clip}\n")
+                        f.write(f"Has Text? {'text' in first_clip} -> {first_clip.get('text')}\n")
+            except Exception as ex:
+                print(f"Failed to log debug payload: {ex}")
+
             # FUTURE: Pass output_dir if we want exports in project folder
             background_tasks.add_task(run_export_job, job_id, request.project, EXPORT_DIR)
             
