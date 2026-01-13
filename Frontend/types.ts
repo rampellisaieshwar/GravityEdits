@@ -16,6 +16,12 @@ export interface Clip {
     saturation: number;
     filterStrength: number;
   };
+  words?: {
+    word: string;
+    start: number;
+    end: number;
+    probability: number;
+  }[];
 }
 
 export interface ViralShort {
@@ -73,4 +79,9 @@ export interface TextOverlay {
   positionY?: number; // Percentage 0-100 (default 50)
   textColor?: string;
   fontFamily?: string;
+}
+
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
 }

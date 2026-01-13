@@ -199,149 +199,113 @@ def generate_xml_edl(project_data, output_path, project_name="Project", user_des
         "{user_description}"
         """
 
-    # 1. Prepare Prompt
-    # We strip some bulky data to keep context small if needed (but Llama 3 usually handles it)
-    prompt = f"""
-    You are a professional Video Editor AI. Your task is to create an EDL (Edit Decision List) in XML format based on the following analysis data of video clips.
-    
-    {user_context}
-
-    CRITICAL RULES:
-    1. Output ONLY valid XML. No markdown, no conversation.
-    2. Review the 'visual_data' and 'text' (transcription).
-    3. Keep clips that are visually 'bright' and have interesting speech.
-    4. Reject clips (keep="false") that are 'dark' or have silence/boring text.
-    5. The XML root must be <project name="{project_name}">. Inside, <edl> contains <clip> tags.
-    6. YOU MUST INCLUDE ALL CLIPS from the input, even if you mark them as keep="false". Do not filter any clips out.
-    7. Maintain the exact 'id', 'source', 'start', 'end' from input.
-    8. CALCULATE DURATION: duration must be exactly (end - start). Do not output "..." or "unknown".
-    9. You MUST include a 'reason' attribute for EVERY <clip> tag, explaining why it was kept or rejected.
-    10. CRITICAL: You MUST include the 'text' attribute containing the transcription. Escape double quotes if needed.
-    11. SUGGEST COLOR GRADING: For the project globally and for each clip, suggest color grading settings based on the mood.
-       - brightness/exposure: -5.0 to 5.0 (default 0)
-       - contrast: -100 to 100 (default 0)
-    11. VIRAL SHORTS: Identification of 1-3 potential "Viral Shorts" from the footage.
-       - Look for high-energy moments, funny bloopers, or strong hooks.
-       - These should be separate from the main EDL.
-       - Provide a 'title' and 'description' for the short.
-       - List the 'clip_ids' that make up this short (comma separated).
-    12. TEXT OVERLAYS: Analyze the ENTIRE transcript to understand the structure.
-       - Generate text overlays ONLY for MAJOR TOPIC CHANGES or SECTION HEADERS.
-       - Do NOT highlight random words. Only label the start of a new idea or chapter.
-       - "content": The TOPIC TITLE or SECTION NAME (max 3 words). CRITICAL: Keep it short to fit on screen.
-       - "start": Taking place exactly when the new topic begins.
-       - "duration": 2.0 to 4.0 seconds.
-       - "style": "pop" or "slide_up".
-       - "origin": "ai".
-       - "color": Hex code for text color (e.g., "#FF0000", "#FFFFFF", "#FFFF00"). Choose based on mood (e.g., Red for exciting/urgent, White for standard).
-       - "size": Font size multiplier. STRICT RANGE: 2 to 6. Default 4. Never exceed 6 or it will be too big.
-       - "x": Horizontal position percentage (10-90). Default 50 (center). STRICT: Do not use 0 or 100 to avoid cutting off.
-       - "y": Vertical position percentage (10-90). Default 50 (center). STRICT: Do not use 0 or 100.
-       - "font": Font family (e.g., "Impact", "Arial-Bold"). Use "Impact" for memes/excitement.
-    OUTPUT SCHEMA:
-    <project name="...">
-      <global_settings>...</global_settings>
-      <edl>...</edl>
-      <viral_shorts>...</viral_shorts>
-      <overlays>
-        <text id="t1" content="INTRO" start="0.5" duration="2.0" style="pop" origin="ai" color="#FFFFFF" size="5" x="50" y="50" font="Impact"/>
-        <text id="t2" content="KEY POINT" start="10.5" duration="3.0" style="slide_up" origin="ai" color="#FFFF00" size="4" x="50" y="80" font="Arial-Bold"/>
-      </overlays>
-    </project>
-
-    INPUT DATA:
-    {json.dumps(project_data, indent=2)}
-    
-    IMPORTANT: You MUST generate at least one <short> in the <viral_shorts> section if the footage allows.
-    """
-    
-    # 2. Call Ollama (Llama 3) via Config
     try:
         from . import llm_config
-    except ImportError:
-        import llm_config
-    
-    try:
-        if llm_config.LLM_PROVIDER == "ollama":
-            url = f"{llm_config.OLLAMA_BASE_URL}/api/generate"
-            payload = {
-                "model": llm_config.LLM_MODEL,
-                "prompt": prompt,
-                "stream": False,
-                "options": {
-                    "temperature": 0.4  # Increased from 0.2 to allow some creativity for shorts
-                }
-            }
-            
-            response = requests.post(url, json=payload, timeout=180)
-            
-            if response.status_code == 200:
-                result = response.json()
-                llm_output = result.get("response", "").strip()
-                
-                # Simple cleanup to ensure we just get XML
-                if "```xml" in llm_output:
-                    llm_output = llm_output.split("```xml")[1].split("```")[0].strip()
-                elif "```" in llm_output:
-                    llm_output = llm_output.split("```")[1].split("```")[0].strip()
-                    
-                # Basic validation
-                if "<project" in llm_output and "</project>" in llm_output:
-                    with open(output_path, "w") as f:
-                        f.write(llm_output)
-                    print(f"✨ {llm_config.LLM_MODEL} generated an EDL!")
-                    return
-                else:
-                    print(f"⚠️ {llm_config.LLM_MODEL} output invalid XML. Falling back to manual rule-based editing.")
-            else:
-                print(f"⚠️ Ollama Error: {response.status_code} - {response.text}")
+        key = api_key if api_key else llm_config.GEMINI_API_KEY
         
-        elif llm_config.LLM_PROVIDER == "gemini":
-            try:
-                import google.generativeai as genai
-                
-                # Determine Key (User > Config > None)
-                key_to_use = api_key if api_key else llm_config.GEMINI_API_KEY
-                
-                if not key_to_use:
-                    print("⚠️ No Gemini API Key provided. Cannot run AI analysis.")
-                    raise Exception("Missing Gemini API Key")
-
-                genai.configure(api_key=key_to_use)
-                
-                model = genai.GenerativeModel(
-                    llm_config.LLM_MODEL,
-                    generation_config=genai.GenerationConfig(
-                        temperature=0.4,
-                    )
-                )
-                
-                # ... same generation logic ...
-                response = model.generate_content(prompt)
-                llm_output = response.text.strip()
-                
-                # Simple cleanup
-                if "```xml" in llm_output:
-                    llm_output = llm_output.split("```xml")[1].split("```")[0].strip()
-                elif "```" in llm_output:
-                    llm_output = llm_output.split("```")[1].split("```")[0].strip()
-                
-                if "<project" in llm_output and "</project>" in llm_output:
-                    with open(output_path, "w") as f:
-                        f.write(llm_output)
-                    print(f"✨ {llm_config.LLM_MODEL} generated an EDL!")
-                    return
-                else:
-                    print(f"⚠️ {llm_config.LLM_MODEL} output invalid XML: {llm_output[:100]}...")
-            
-            except Exception as e:
-                print(f"⚠️ Gemini Error: {e}")
+        # Configure Gemini (New SDK)
+        from google import genai
+        client = genai.Client(api_key=key)
         
-        else:
-             print(f"Provider {llm_config.LLM_PROVIDER} not implemented.")
+        # Convert JSON to string
+        json_input = json.dumps(project_data, indent=2)
+        
+        # Use user_description if provided, otherwise a default
+        user_desc = user_description if user_description else 'Make it viral and fast-paced.'
 
+        prompt = f"""
+        ROLE: Expert Video Editor, Linguist, and Colorist.
+        
+        INPUT DATA (Sanitized but may still contain errors):
+        {json_input}
+        
+        USER CONTEXT: "{user_desc}"
+        
+        ---------------------------------------------------------
+        YOUR 5-STEP MISSION (THE "WAKULLAH" PROTOCOL):
+        ---------------------------------------------------------
+        
+        STEP 1: TEXT SANITIZATION (The Ghostbuster Filter)
+        - The transcript may still contain phantom words (e.g., "Banana", "Penguin", "Steam").
+        - RULE: If a word is a random noun that doesn't fit the sentence context, DELETE IT.
+        - RULE: Fix phonetic errors (e.g., "Pre-ill" -> "Premiere", "Strain moral" -> "Train models").
+        - OUTPUT: Use this CLEANED text in the final XML.
+        
+        STEP 2: SURGICAL EDITING (Bad Takes)
+        - Look for semantic duplicates (e.g., "The first step... [pause]... The first step is...").
+        - ACTION: Keep ONLY the best/last version. Mark the others as keep="false".
+        - RULE: Cut "dead air" by adjusting 'start' and 'end' times to match the clean speech.
+        
+        STEP 3: VISUAL REPAIR (The "Fix It" Logic)
+        - Check 'visual_data' for each clip.
+        - IF brightness is "dark" or "low":
+          - DO NOT DELETE. Instead, ADD: <correction type="brightness" value="1.4" />
+        - IF emotion is "dull":
+          - ADD: <correction type="saturation" value="1.2" />
+          
+        STEP 4: VIRAL ENHANCEMENTS (Overlays)
+        - Identify 3-5 "High Value" moments (Topic shifts, Punchlines).
+        - GENERATE <overlays> for them.
+        - Style: "pop", "slide_up" | "typewriter".
+        - Colors: Yellow (#FFFF00) for emphasis, White (#FFFFFF) for standard.
+        
+        STEP 5: VIRAL SHORTS (The Hook)
+        - Identify 2 separate sequences (15s-60s) that act as standalone viral shorts.
+        - Add them to the <viral_shorts> section.
+        
+        ---------------------------------------------------------
+        OUTPUT FORMAT (Strict XML):
+        ---------------------------------------------------------
+        <project name="{project_name}">
+            <global_settings>
+                <frame_rate>30</frame_rate>
+            </global_settings>
+            
+            <edl>
+                <clip id="1" source="video.mp4" start="0.5" end="4.2" keep="true" reason="Clean intro" text="Welcome to the AI editor">
+                    <correction type="brightness" value="1.3" /> 
+                </clip>
+                
+                <clip id="2" source="video.mp4" start="4.2" end="8.0" keep="false" reason="Redundant / Bad Audio" />
+            </edl>
+            
+            <viral_shorts>
+                <short>
+                    <title>The Secret Trick</title>
+                    <clip_ids>5,6,7</clip_ids>
+                </short>
+            </viral_shorts>
+            
+            <overlays>
+                <text id="t1" content="GAME CHANGER" start="0.5" duration="2.0" style="pop" color="#FFFF00" size="5" x="50" y="50" font="Arial-Bold"/>
+            </overlays>
+        </project>
+        """
+        
+        # Call Gemini (New SDK)
+        response = client.models.generate_content(
+            model="gemini-2.5-pro",
+            contents=prompt
+        )
+        
+        # Clean Output
+        # Handle potential safety block or empty response
+        if not response.text:
+             print("AI returned empty response (Safety Block?)")
+             raise ValueError("AI Safety Block")
+
+        xml_out = response.text.replace("```xml", "").replace("```", "").strip()
+        
+        with open(output_path, "w") as f:
+            f.write(xml_out)
+            
+        print(f"✨ Master EDL Generated with Wakullah Protocol!")
+            
     except Exception as e:
-        print(f"⚠️ Failed to connect to AI: {e}. Falling back to manual logic.")
+        print(f"❌ AI Generation Failed: {e}")
+        # Fallback dump for manual review
+        with open(output_path, "w") as f:
+            f.write(f"<project name='{project_name}'><error>AI Failed: {str(e)}</error></project>")
 
     # 3. Fallback Manual Logic (if LLM fails)
     print("⚙️ Running manual fallback logic...")

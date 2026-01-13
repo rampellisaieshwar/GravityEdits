@@ -50,36 +50,56 @@ class RenderLogger(ProgressBarLogger):
                 percentage = (value / total) * 100
                 self.prog_notifier({"status": "rendering", "progress": percentage, "message": self.last_message})
 
-def create_motion_text(content, duration=2.0, style='pop', fontsize=70, color='white', font='Arial-Bold', pos=None, fontsize_mult=1.0):
+def create_motion_text(content, duration=2.0, style='pop', fontsize=70, color='white', font='Arial-Bold', pos=None, fontsize_mult=1.0, max_width=None):
     """
-    Creates a TextClip with basic styling.
+    Creates a TextClip with basic styling and wrapping.
     """
     try:
         # Scale font size
         effective_fontsize = int(fontsize * fontsize_mult)
         
+        # If max_width is provided, use 'caption' method to wrap text
+        method = 'caption' if max_width else 'label'
+        size = (max_width, None) if max_width else None # width, height(auto)
+
         # We use a stroke to make it pop. Font might need to be available specifically or generic 'Arial'
-        # method='caption' or 'label'. 'label' is usually safer for simple text.
         try:
-            txt = TextClip(text=content, font_size=effective_fontsize, color=color, stroke_color='black', stroke_width=2, method='label', font=font)
+            txt = TextClip(
+                text=content, 
+                font_size=effective_fontsize, 
+                color=color, 
+                stroke_color='black', 
+                stroke_width=2, 
+                method=method, 
+                size=size,
+                align='center', 
+                font=font
+            )
         except Exception as e1:
             print(f"⚠️ Primary font '{font}' failed: {e1}")
             try:
                 # Fallback 1: Arial
-                txt = TextClip(text=content, font_size=effective_fontsize, color=color, stroke_color='black', stroke_width=2, method='label', font='Arial')
+                txt = TextClip(
+                    text=content, 
+                    font_size=effective_fontsize, 
+                    color=color, 
+                    stroke_color='black', 
+                    stroke_width=2, 
+                    method=method, 
+                    size=size,
+                    align='center',
+                    font='Arial'
+                )
             except Exception as e2:
                  print(f"⚠️ Fallback font 'Arial' failed: {e2}")
                  # Fallback 2: System Default (no font arg)
-                 txt = TextClip(text=content, font_size=effective_fontsize, color=color, method='label')
+                 txt = TextClip(text=content, font_size=effective_fontsize, color=color, method=method, size=size, align='center')
 
         txt = txt.with_duration(duration)
         
         # 1. Custom Position (Overrides Style)
         if pos is not None:
             # pos is (x_pct, y_pct) tuple from 0.0 to 1.0 representing CENTER of text
-            # MoviePy set_position uses Top-Left by default for relative. 
-            # To strictly center, we'd need to know video size, which we don't here.
-            # Best approximation: Use relative position (Top-Left) for now.
             txt = txt.with_position(pos, relative=True)
             
             # If style is fade, we still apply fade effect
@@ -370,11 +390,28 @@ def render_project(project_data, progress_callback=None):
                 if end > original_video.duration: end = original_video.duration
                 if start >= end:
                      print(f"⚠️ Invalid trim for {clip_data['id']}: start {start} >= end {end}")
-                     # Try to fix if it's just a small drift, otherwise skip
-                     if start < original_video.duration:
-                         end = original_video.duration
-                     else:
-                         continue
+                     continue
+
+                # --- 2-SECOND BUFFER LOGIC (PYTHON FIX) ---
+                # Add padding, but respect video boundaries
+                buffer = 2.0
+                safe_start = max(0, start - buffer)
+                
+                # We need to handle overlaps on the timeline during stitching, but here we cut individually.
+                # If we extend 'end', we might duplicate the start of the NEXT clip.
+                # The user wants "cut up the video extra two seconds prior and after".
+                # This implies individual clips should be longer.
+                
+                # Check next clip to avoid massive overlap?
+                # User said: "added two seconds in the second video so AI would understand that it is repeated so it should cut it"
+                # Actually, simply extending duration is safer if we just want "buffer".
+                
+                safe_end = min(original_video.duration, end + buffer)
+                
+                # Apply buffer
+                start = safe_start
+                end = safe_end
+                # ------------------------------------------
                 
                 cut_clip = original_video.subclipped(start, end)
                 
@@ -475,8 +512,12 @@ def render_project(project_data, progress_callback=None):
                             custom_pos = (float(p_x)/100.0, float(p_y)/100.0)
                         except: pass
                     
-                    # Create Text Clip
-                    txt = create_motion_text(content, duration=dur, style=style, fontsize_mult=mult, pos=custom_pos, color=t_color, font=font_fam)
+                    # Calculate safe max width (80% of video width)
+                    current_w, current_h = final_video.size
+                    max_w = int(current_w * 0.8)
+
+                    # Create Text Clip with max_width
+                    txt = create_motion_text(content, duration=dur, style=style, fontsize_mult=mult, pos=custom_pos, color=t_color, font=font_fam, max_width=max_w)
                     if txt:
                         txt = txt.with_start(start)
                         overlay_clips.append(txt)

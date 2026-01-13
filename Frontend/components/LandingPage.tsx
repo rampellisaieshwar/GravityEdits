@@ -102,7 +102,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onProjectLoaded, onStartUploa
             if (res.ok) {
                 onStartUpload(newProjectName);
             } else {
-                alert("Failed to create project (Name might exist)");
+                const errData = await res.json().catch(() => ({}));
+                alert(`Failed to create project: ${errData.detail || "Name might exist or server error"}`);
             }
         } catch (e) {
             console.error(e);

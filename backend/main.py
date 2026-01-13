@@ -131,6 +131,7 @@ def list_projects():
 
 @app.post("/api/projects")
 def create_project(data: ProjectCreate):
+    print(f"Creating project: {data.name}")
     path = get_project_path(data.name)
     if os.path.exists(path):
         raise HTTPException(status_code=400, detail="Project already exists")
@@ -400,6 +401,7 @@ class ChatRequest(BaseModel):
     query: str
     project_name: str = None
     api_key: Optional[str] = None
+    current_state: Optional[Dict[str, Any]] = None
     
 @app.post("/chat/")
 async def chat_with_ai(request: ChatRequest):
@@ -430,7 +432,14 @@ async def chat_with_ai(request: ChatRequest):
         project_path = os.path.join(PROJECTS_DIR, "_global_chat")
 
     # Delegate to Chat Engine (handles LangChain history internally)
-    response = chat_engine.chat(request.query, context, project_path=project_path, api_key=request.api_key)
+    # Pass current_state if provided by frontend
+    response = chat_engine.chat(
+        request.query, 
+        context, 
+        project_path=project_path, 
+        api_key=request.api_key,
+        current_state=request.current_state
+    )
     
     return {"response": response}
 

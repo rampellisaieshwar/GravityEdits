@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { LayoutGrid, List, Film, Zap, Search, MoreVertical, Sparkles, Send, Loader2, Plus, Trash2, Download, Music, Volume2 } from 'lucide-react';
+import { LayoutGrid, List, Film, Zap, Search, MoreVertical, Sparkles, Send, Loader2, Plus, Trash2, Download, Music, Volume2, Settings } from 'lucide-react';
 import { VideoProject, Clip } from '../types';
 import { formatDuration } from '../utils/format';
 import { API_BASE_URL } from '../constants';
@@ -16,12 +16,10 @@ interface SidebarProps {
   onLoadShort: (shortId: number) => void;
   onExportShort: (shortId: number) => void;
   onAddAudioClip?: (source: string, time: number, track: number) => void;
+  onOpenSettings: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ project, tab, setTab, onSelectClip, onUpdateProject, selectedId, onOpenUpload, onBack, onLoadShort, onExportShort, onAddAudioClip }) => {
-  const [aiCommand, setAiCommand] = useState('');
-  const [isAiProcessing, setIsAiProcessing] = useState(false);
-  const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'assistant', content: string }[]>([]);
+const Sidebar: React.FC<SidebarProps> = ({ project, tab, setTab, onSelectClip, onUpdateProject, selectedId, onOpenUpload, onBack, onLoadShort, onExportShort, onAddAudioClip, onOpenSettings }) => {
   const [audioFiles, setAudioFiles] = useState<{ name: string; path: string }[]>([]);
   const audioInputRef = useRef<HTMLInputElement>(null);
 
@@ -104,45 +102,7 @@ const Sidebar: React.FC<SidebarProps> = ({ project, tab, setTab, onSelectClip, o
     onUpdateProject(rest as VideoProject);
   };
 
-  const handleAiCommand = async () => {
-    if (!aiCommand.trim()) return;
 
-    // Optimistic Update
-    const userMsg = { role: 'user' as const, content: aiCommand };
-    setChatHistory(prev => [...prev, userMsg]);
-    setAiCommand('');
-    setIsAiProcessing(true);
-
-    try {
-      const apiKey = localStorage.getItem("gravity_api_key");
-      const response = await fetch(`${API_BASE_URL}/chat/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          query: userMsg.content,
-          project_name: project?.name || null,
-          api_key: apiKey
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to get response');
-      }
-
-      const data = await response.json();
-      const aiResponse = data.response || "I couldn't generate a response.";
-
-      setChatHistory(prev => [...prev, { role: 'assistant', content: aiResponse }]);
-
-    } catch (error) {
-      console.error("AI Assistant failed:", error);
-      setChatHistory(prev => [...prev, { role: 'assistant', content: "Sorry, I encountered an error connecting to the AI brain." }]);
-    } finally {
-      setIsAiProcessing(false);
-    }
-  };
 
   return (
     <div className="w-full h-full bg-black/40 backdrop-blur-md flex flex-col border-r border-white/5">
@@ -362,67 +322,7 @@ const Sidebar: React.FC<SidebarProps> = ({ project, tab, setTab, onSelectClip, o
         )}
       </div>
 
-      {/* AI Assistant Command Box */}
-      <div className="flex-1 min-h-0 flex flex-col border-t border-[#2A2A2A] bg-[#1a1a1a]">
-        {/* Chat History Area (New) */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-3 scrollbar-thin min-h-[100px]">
-          {/* Welcome Message */}
-          <div className="flex flex-col items-start gap-1">
-            <div className="flex items-center gap-2">
-              <Sparkles size={10} className="text-blue-400" />
-              <span className="text-[10px] font-bold text-gray-400">Gravity AI</span>
-            </div>
-            <div className="bg-[#2A2A2A] rounded-lg rounded-tl-none p-2 text-[10px] text-gray-300 max-w-[90%]">
-              {project ? "I've analyzed your footage. Ask me anything or tell me how to edit!" : "Ready to assist. Import a project to get started."}
-            </div>
-          </div>
 
-          {/* Dynamic History */}
-          {chatHistory.map((msg, i) => (
-            <div key={i} className={`flex flex-col gap-1 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-              <div className={`rounded-lg p-2 text-[10px] max-w-[90%] ${msg.role === 'user' ? 'bg-blue-600/20 text-blue-100 rounded-tr-none' : 'bg-[#2A2A2A] text-gray-300 rounded-tl-none'
-                }`}>
-                {msg.content}
-              </div>
-            </div>
-          ))}
-
-          {isAiProcessing && (
-            <div className="flex flex-col items-start gap-1">
-              <div className="bg-[#2A2A2A] rounded-lg rounded-tl-none p-2 text-[10px] text-gray-300 flex items-center gap-2">
-                <Loader2 size={10} className="animate-spin text-gray-500" /> Thinking...
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Input Area */}
-        <div className="p-3 pt-0">
-          <div className="relative">
-            <textarea
-              value={aiCommand}
-              onChange={(e) => setAiCommand(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleAiCommand();
-                }
-              }}
-              disabled={isAiProcessing}
-              placeholder={project ? "e.g. 'Show me the drone shots'..." : "Waiting for project..."}
-              className="w-full bg-[#121212] border border-[#2A2A2A] rounded-lg p-2 text-[10px] min-h-[40px] max-h-[100px] resize-none focus:outline-none focus:border-blue-500 pr-8 text-gray-300 placeholder:text-gray-600 disabled:opacity-50"
-            />
-            <button
-              onClick={handleAiCommand}
-              disabled={isAiProcessing || !aiCommand.trim()}
-              className="absolute bottom-2 right-2 p-1.5 text-blue-500 hover:bg-blue-500/10 rounded-md disabled:opacity-30 disabled:text-gray-700 transition-all"
-            >
-              {isAiProcessing ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-            </button>
-          </div>
-          {/* <p className="text-[8px] text-gray-600 mt-2 text-center italic">Gravity backend will intelligently restructure your edit</p> */}
-        </div>
-      </div>
     </div >
   );
 };

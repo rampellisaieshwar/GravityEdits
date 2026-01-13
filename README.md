@@ -4,12 +4,17 @@ Gravity Edits is a modern, AI-powered video editing platform designed to streaml
 
 ## 🚀 Key Features
 
-*   **🤖 AI-Driven Analysis**: Automatically detects interesting scenes, dialogue, and "viral moments" from raw uploads using Google Gemini.
+*   **🤖 Agentic AI Editor**: A fully autonomous AI (Gemini 1.5 Pro) that acts as a pair programmer for your video.
+    *   **Natural Language Editing**: Command the AI to "Cut the part about bananas," "Add a Subscribe text at 5s," or "Fix the transcript."
+    *   **Agentic Tools**: The AI can execute **Cut**, **Keep**, **Split**, **Add Text**, and **Edit Transcript** commands directly on the timeline.
+    *   **Intelligent Resolution**: It understands context. "Make it red" means Reject. "Make it Green" means Keep. It finds clips by content automatically.
+*   **👻 Ghostbuster Protocol ("Wakullah")**:
+    *   **Hallucination Filter**: Automatically removes low-confidence "phantom words" (e.g., random "Thank you" or "Banana" in silence) from the transcript before the AI even sees it.
+    *   **Skeptical Mode**: The AI is instructed to actively distrust the transcript if words seem contextually "stupid" or out of place, surgically removing them.
 *   **✂️ Smart Timeline**: A non-linear editor (NLE) with magnetic snapping, multi-track audio, and precise drag-and-drop capabilities.
     *   **Draggable Background Music**: Customize the start time and duration of your soundtrack visually.
     *   **Advanced Audio Tools**: Split, trim, and re-arrange secondary audio clips effortlessly.
 *   **📱 Viral Shorts Mode**: Instantly generates 9:16 vertical videos optimized for TikTok/Reels/Shorts, complete with smart cropping.
-*   **💬 AI Chat Assistant**: Context-aware chat (powered by LangChain) allows you to ask questions about your video or request specific edits using natural language.
 *   **🔑 BYOK Architecture**: **Bring Your Own Key** system. Your API keys (Gemini) are stored locally in your browser for maximum security and privacy. No backend storage of sensitive keys.
 *   **🎨 Color & Effects**: Basic color grading (Temperature, Exposure, Contrast) and text overlays.
 *   **⚡ Local Rendering**: High-performance rendering pipeline built on **MoviePy** and **OpenCV** to generate MP4s directly on your machine (or server).

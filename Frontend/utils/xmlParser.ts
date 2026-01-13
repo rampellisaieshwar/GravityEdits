@@ -74,14 +74,15 @@ export const parseEDLXml = (xmlString: string, metadata?: any): VideoProject => 
     return {
       id,
       source: node.getAttribute('source') || 'Unknown Source',
-      keep: node.getAttribute('keep') === 'true',
+      keep: (node.getAttribute('keep') || 'true').toLowerCase().trim() !== 'false',
       reason: node.getAttribute('reason') || 'No reason provided',
       text: node.getAttribute('text') || meta?.text || '',
       start,
       end,
       emotionScore: Math.floor(Math.random() * 40) + 60,
       duration,
-      colorGrading: parseColorGrading(node)
+      colorGrading: parseColorGrading(node),
+      words: meta?.words || []
     };
   });
 
