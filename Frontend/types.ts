@@ -74,9 +74,14 @@ export interface TextOverlay {
   duration: number;
   style: string; // 'pop', 'slide_up'
   origin: 'ai' | 'manual';
-  fontSize?: number; // Percentage relative to container width (default ~4)
-  positionX?: number; // Percentage 0-100 (default 50)
-  positionY?: number; // Percentage 0-100 (default 50)
+  // NORMALIZED COORDINATES (0.0 to 1.0)
+  // This is the "Universal Coordinate" protocol:
+  // - 0.0 = left/top edge
+  // - 0.5 = center
+  // - 1.0 = right/bottom edge
+  fontSize?: number;   // % of VIDEO HEIGHT (e.g., 0.05 = 5% of height)
+  positionX?: number;  // 0.0-1.0 (center of text, horizontally)
+  positionY?: number;  // 0.0-1.0 (center of text, vertically)
   textColor?: string;
   fontFamily?: string;
 }

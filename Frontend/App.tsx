@@ -132,9 +132,27 @@ const App: React.FC = () => {
   // -- LANDING PAGE HANDLERS --
   const handleProjectLoaded = (loadedProject: VideoProject, name?: string, shouldSwitchMode = true) => {
     setProject(loadedProject);
-    if (name) setCurrentProjectName(name);
-    // If loaded from XML, name is inside project usually, but we might want explicit folder name
-    else setCurrentProjectName(loadedProject.name);
+    const pName = name || loadedProject.name;
+    setCurrentProjectName(pName);
+
+    // Reset and Fetch History
+    setChatHistory([]); // Clear old history
+    // Fetch persisted history if available
+    fetch(`${API_BASE_URL}/api/projects/${pName}/chat-history`)
+      .then(res => res.ok ? res.json() : [])
+      .then(history => {
+        // Adapt format if needed specific to frontend ChatMessage type
+        // Backend stores langchain format or legacy. We might need to map.
+        // For now assume simple format or just clear it effectively separates sessions.
+        if (Array.isArray(history)) {
+          const mapped = history.map((h: any) => ({
+            role: (h.type === 'human' ? 'user' : 'assistant'),
+            content: h.data.content
+          }));
+          setChatHistory(mapped);
+        }
+      })
+      .catch(() => { }); // silent fail, blank history is fine
 
     if (shouldSwitchMode) setAppMode('editor');
   };
@@ -268,6 +286,14 @@ const App: React.FC = () => {
   const reorderClips = (newClips: Clip[]) => {
     if (!project) return;
     setProject({ ...project, edl: newClips });
+  };
+
+  const handleDeleteClip = (clipId: string) => {
+    if (!project) return;
+    const newEdl = project.edl.filter(c => c.id !== clipId);
+    setProject({ ...project, edl: newEdl });
+    // Clear selection if deleted clip was selected
+    if (selectedClipId === clipId) setSelectedClipId(null);
   };
 
   const handleSplitClip = (clipId: string, splitOffset: number) => {
@@ -658,9 +684,28 @@ const App: React.FC = () => {
       start: start,
       duration: 3.0,
       style: 'pop',
-      origin: 'manual'
+      origin: 'manual',
+      // NORMALIZED COORDINATES (0.0 to 1.0)
+      fontSize: 0.08,       // 8% of video HEIGHT (Social media standard)
+      positionX: 0.5,       // Center horizontally (0.5 = 50%)
+      positionY: 0.8,       // Lower third (0.8 = 80%)
+      textColor: '#ffffff'
     };
     setProject({ ...project, overlays: [...(project.overlays || []), newOverlay] });
+  };
+
+  const handleDeleteOverlay = (overlayId: string) => {
+    if (!project) return;
+    const newOverlays = (project.overlays || []).filter(o => o.id !== overlayId);
+    setProject({ ...project, overlays: newOverlays });
+    // Clear selection if deleted overlay was selected
+    if (selectedOverlayId === overlayId) setSelectedOverlayId(null);
+  };
+
+  const handleDeleteAudioClip = (clipId: string) => {
+    if (!project) return;
+    const newAudioClips = (project.audioClips || []).filter(c => c.id !== clipId);
+    setProject({ ...project, audioClips: newAudioClips });
   };
 
   if (appMode === 'landing') {
@@ -854,6 +899,7 @@ const App: React.FC = () => {
             onSelectClip={(id) => { setSelectedClipId(id); setSelectedOverlayId(null); }}
             onSelectOverlay={(id) => { setSelectedOverlayId(id); setSelectedClipId(null); }}
             onToggleStatus={toggleClipStatus}
+            onDeleteClip={handleDeleteClip}
             onReorder={reorderClips}
             currentTime={currentTime}
             onSeek={handleSeek}
@@ -866,8 +912,10 @@ const App: React.FC = () => {
             onRemoveTrack={handleRemoveTrack}
             onUpdateOverlay={handleUpdateOverlay}
             onAddOverlay={handleAddOverlay}
+            onDeleteOverlay={handleDeleteOverlay}
             onUpdateBgMusic={handleUpdateBgMusic}
             onUpdateAudioClip={handleUpdateAudioClip}
+            onDeleteAudioClip={handleDeleteAudioClip}
             onSplitAudioClip={handleSplitAudioClip}
             onSplitBgMusic={handleSplitBgMusic}
           />

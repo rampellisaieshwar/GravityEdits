@@ -204,8 +204,8 @@ def generate_xml_edl(project_data, output_path, project_name="Project", user_des
         key = api_key if api_key else llm_config.GEMINI_API_KEY
         
         # Configure Gemini (New SDK)
-        from google import genai
-        client = genai.Client(api_key=key)
+        import google.generativeai as genai
+        genai.configure(api_key=key)
         
         # Convert JSON to string
         json_input = json.dumps(project_data, indent=2)
@@ -231,10 +231,14 @@ def generate_xml_edl(project_data, output_path, project_name="Project", user_des
         - RULE: Fix phonetic errors (e.g., "Pre-ill" -> "Premiere", "Strain moral" -> "Train models").
         - OUTPUT: Use this CLEANED text in the final XML.
         
-        STEP 2: SURGICAL EDITING (Bad Takes)
+        STEP 2: SURGICAL EDITING (Bad Takes & Quality Control)
         - Look for semantic duplicates (e.g., "The first step... [pause]... The first step is...").
         - ACTION: Keep ONLY the best/last version. Mark the others as keep="false".
         - RULE: Cut "dead air" by adjusting 'start' and 'end' times to match the clean speech.
+        - CRITICAL RULE (QUALITY CONTROL):
+          - If a clip contains broken grammar, stuttering that breaks flow, or nonsense words, SET keep="false" reason="Bad Grammar/Flow".
+          - If a clip is just laughing, breathing, coughing, or silence with no meaningful speech, SET keep="false" reason="Non-verbal/Noise".
+          - If the transcript is unintelligible or hallucinated (random words), SET keep="false" reason="Bad Audio/Transcript".
         
         STEP 3: VISUAL REPAIR (The "Fix It" Logic)
         - Check 'visual_data' for each clip.
@@ -282,11 +286,9 @@ def generate_xml_edl(project_data, output_path, project_name="Project", user_des
         </project>
         """
         
-        # Call Gemini (New SDK)
-        response = client.models.generate_content(
-            model="gemini-2.5-pro",
-            contents=prompt
-        )
+        # Call Gemini (Standard SDK)
+        model = genai.GenerativeModel("gemini-1.5-pro")
+        response = model.generate_content(prompt)
         
         # Clean Output
         # Handle potential safety block or empty response
@@ -300,6 +302,7 @@ def generate_xml_edl(project_data, output_path, project_name="Project", user_des
             f.write(xml_out)
             
         print(f"✨ Master EDL Generated with Wakullah Protocol!")
+        return True
             
     except Exception as e:
         print(f"❌ AI Generation Failed: {e}")
@@ -332,6 +335,8 @@ def generate_xml_edl(project_data, output_path, project_name="Project", user_des
     
     with open(output_path, "w") as f:
         f.write(edl_content)
+        
+    return False
 
 # --- TEST AREA ---
 if __name__ == "__main__":

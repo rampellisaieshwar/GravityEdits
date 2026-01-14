@@ -50,78 +50,146 @@ class RenderLogger(ProgressBarLogger):
                 percentage = (value / total) * 100
                 self.prog_notifier({"status": "rendering", "progress": percentage, "message": self.last_message})
 
-def create_motion_text(content, duration=2.0, style='pop', fontsize=70, color='white', font='Arial-Bold', pos=None, fontsize_mult=1.0, max_width=None):
+def create_motion_text(content, duration=2.0, style='pop', fontsize=70, color='white', font='Arial-Bold', pos=None, resize_func=None, max_width=None):
     """
-    Creates a TextClip with basic styling and wrapping.
+    Creates a TextClip using a double-layer technique for clean strokes.
     """
     try:
-        # Scale font size
-        effective_fontsize = int(fontsize * fontsize_mult)
+        effective_fontsize = int(fontsize)
+        # Moderate stroke width - not too thick to prevent text balloon effect
+        # 8% provides good visibility without making text massive
+        stroke_w = max(4, int(effective_fontsize * 0.08))
+ 
         
-        # If max_width is provided, use 'caption' method to wrap text
+        # Method 'caption' allows wrapping. 'label' does not.
+        # If max_width is provided, use caption.
         method = 'caption' if max_width else 'label'
-        size = (max_width, None) if max_width else None # width, height(auto)
-
-        # We use a stroke to make it pop. Font might need to be available specifically or generic 'Arial'
-        try:
-            txt = TextClip(
-                text=content, 
-                font_size=effective_fontsize, 
-                color=color, 
-                stroke_color='black', 
-                stroke_width=2, 
-                method=method, 
-                size=size,
-                align='center', 
-                font=font
-            )
-        except Exception as e1:
-            print(f"⚠️ Primary font '{font}' failed: {e1}")
+        
+        # 1. Stroke Layer (Background)
+        # We start with a base config
+        def make_clip(c_color, c_stroke_color, c_stroke_width):
+            # Base arguments for TextClip
+            text_args = {
+                'text': content,
+                'font_size': effective_fontsize,
+                'color': c_color,
+                'stroke_color': c_stroke_color,
+                'stroke_width': c_stroke_width,
+                'method': method
+            }
+            
+            # Only add size if max_width is provided
+            if max_width:
+                text_args['size'] = (max_width, None)
+            
             try:
-                # Fallback 1: Arial
-                txt = TextClip(
-                    text=content, 
-                    font_size=effective_fontsize, 
-                    color=color, 
-                    stroke_color='black', 
-                    stroke_width=2, 
-                    method=method, 
-                    size=size,
-                    align='center',
-                    font='Arial'
-                )
-            except Exception as e2:
-                 print(f"⚠️ Fallback font 'Arial' failed: {e2}")
-                 # Fallback 2: System Default (no font arg)
-                 txt = TextClip(text=content, font_size=effective_fontsize, color=color, method=method, size=size, align='center')
+                # Try with specified font
+                return TextClip(**text_args, font=font)
+            except:
+                # Fallback to 'Arial'
+                try:
+                    return TextClip(**text_args, font='Arial')
+                except:
+                    # Final fallback to default font
+                    text_args_minimal = {k: v for k, v in text_args.items() if k != 'font'}
+                    return TextClip(**text_args_minimal)
 
+        # Create the Stroke Layer (Black text with thick black stroke)
+        # Note: If we just use stroke_width on the main clip, it renders INSIDE.
+        # By compositing, we get the 'Outside' stroke effect.
+        
+        # 1. Use passed font size (already calculated with boost in main loop)
+        calc_fontsize = int(fontsize)
+
+        # 2. Layer Generation Helper
+        def make_clip(c_color, c_stroke_color, c_stroke_width):
+            text_args = {
+                'text': content,
+                'font_size': calc_fontsize,
+                'color': c_color,
+                'stroke_color': c_stroke_color,
+                'stroke_width': c_stroke_width,
+                'method': method
+            }
+            if max_width: text_args['size'] = (max_width, None)
+            
+            # Correctly use function argument 'font'
+            try: return TextClip(**text_args, font=font)
+            except: 
+                try: return TextClip(**text_args, font='Arial')
+                except: return TextClip(**{k: v for k, v in text_args.items() if k != 'font'})
+
+        # 3. Create Layers
+        # A. Shadow Layer (Offset, slightly blurry/transparent look via color)
+        txt_shadow = make_clip('black', None, 0)
+        
+        # B. Stroke Layer (Background Outline)
+        txt_stroke = make_clip('black', 'black', stroke_w)
+        
+        # C. Fill Layer (Foreground)
+        # Correctly use function argument 'color'
+        txt_fill = make_clip(color, None, 0)
+
+        # 4. Fade Effects
+        if style == 'fade':
+            # Apply to all layers
+            for clip_layer in [txt_shadow, txt_stroke, txt_fill]:
+                try: clip_layer.fadein(0.5).fadeout(0.5)
+                except: pass
+
+        # 5. Composite & Align
+        # We need a canvas big enough for the stroke + shadow
+        # Calculations:
+        # stroke layer is biggest normally.
+        # shadow is offset by pixels.
+        
+        shadow_off = max(4, int(calc_fontsize * 0.05)) # 5% of font size as shadow offset
+        padding = stroke_w + shadow_off + 10 # ample padding
+        
+        # Dimensions are based on the stroke layer (largest)
+        base_w, base_h = txt_stroke.size
+        comp_w = base_w + (padding * 2)
+        comp_h = base_h + (padding * 2)
+        
+        # Center the Stroke Layer in the padded composite
+        stroke_pos = (padding, padding)
+        
+        # Center the Fill Layer RELATIVE to the Stroke Layer
+        # (Fill is smaller than stroke, so we center it to avoid 'glitchy' offset)
+        fill_dx = (txt_stroke.size[0] - txt_fill.size[0]) / 2
+        fill_dy = (txt_stroke.size[1] - txt_fill.size[1]) / 2
+        fill_pos = (padding + fill_dx, padding + fill_dy)
+        
+        # Shadow is same as Fill but offset
+        shadow_pos = (fill_pos[0] + shadow_off, fill_pos[1] + shadow_off)
+        
+        # Position the clips
+        ts = txt_stroke.with_position(stroke_pos)
+        tf = txt_fill.with_position(fill_pos)
+        tshadow = txt_shadow.with_position(shadow_pos)
+        
+        # Order: Shadow -> Stroke -> Fill
+        txt = CompositeVideoClip(
+            [tshadow, ts, tf], 
+            size=(comp_w, comp_h)
+        )
+            
         txt = txt.with_duration(duration)
         
-        # 1. Custom Position (Overrides Style)
-        if pos is not None:
-            # pos is (x_pct, y_pct) tuple from 0.0 to 1.0 representing CENTER of text
-            txt = txt.with_position(pos, relative=True)
-            
-            # If style is fade, we still apply fade effect
-            if style == 'fade':
-                 txt = txt.crossfadein(0.5).crossfadeout(0.5)
-            
-            return txt
-
-        # 2. Style-based Defaults
-        if style == 'slide_up':
-            # Position: start at bottom, move to center? Or just center (simple)
-            txt = txt.with_position(('center', 0.8), relative=True) 
-        elif style == 'fade':
-            # Fade in and out
-            txt = txt.with_position('center')
-            txt = txt.crossfadein(0.5).crossfadeout(0.5)
-        elif style == 'typewriter':
-            # Map typewriter to bottom left for now
-            txt = txt.with_position(('left', 'bottom'))
-        else:
-             # Pop / Center
-            txt = txt.with_position('center')
+        # Positioning Logic - Only apply style-based positioning if no custom pos provided
+        # Custom positioning will be applied AFTER creation by the caller
+        if pos is None:
+            # Apply style-based defaults only when no custom position
+            if style == 'slide_up':
+                txt = txt.with_position(('center', 0.8), relative=True) 
+            elif style == 'fade':
+                txt = txt.with_position('center')
+                # Fade effects already applied above
+            elif style == 'typewriter':
+                txt = txt.with_position(('left', 'bottom'))
+            else:
+                txt = txt.with_position('center')
+        # If pos is provided, don't set position here - let caller handle it
             
         return txt
     except Exception as e:
@@ -129,6 +197,7 @@ def create_motion_text(content, duration=2.0, style='pop', fontsize=70, color='w
         import traceback
         traceback.print_exc()
         return None
+
 
 
 def apply_grading(clip, grading_settings):
@@ -390,28 +459,11 @@ def render_project(project_data, progress_callback=None):
                 if end > original_video.duration: end = original_video.duration
                 if start >= end:
                      print(f"⚠️ Invalid trim for {clip_data['id']}: start {start} >= end {end}")
-                     continue
-
-                # --- 2-SECOND BUFFER LOGIC (PYTHON FIX) ---
-                # Add padding, but respect video boundaries
-                buffer = 2.0
-                safe_start = max(0, start - buffer)
-                
-                # We need to handle overlaps on the timeline during stitching, but here we cut individually.
-                # If we extend 'end', we might duplicate the start of the NEXT clip.
-                # The user wants "cut up the video extra two seconds prior and after".
-                # This implies individual clips should be longer.
-                
-                # Check next clip to avoid massive overlap?
-                # User said: "added two seconds in the second video so AI would understand that it is repeated so it should cut it"
-                # Actually, simply extending duration is safer if we just want "buffer".
-                
-                safe_end = min(original_video.duration, end + buffer)
-                
-                # Apply buffer
-                start = safe_start
-                end = safe_end
-                # ------------------------------------------
+                     # Try to fix if it's just a small drift, otherwise skip
+                     if start < original_video.duration:
+                         end = original_video.duration
+                     else:
+                         continue
                 
                 cut_clip = original_video.subclipped(start, end)
                 
@@ -483,7 +535,12 @@ def render_project(project_data, progress_callback=None):
         overlays = project_data.get('overlays', [])
         if overlays:
             print(f"✨ Adding {len(overlays)} text overlays...")
+            print(f"📐 Video resolution: {final_video.size[0]}x{final_video.size[1]}")
             overlay_clips = [final_video] # Base layer
+            
+            # Get video dimensions for calculations
+            vw, vh = final_video.size
+            print(f"🎬 Processing overlays for {vw}x{vh} video")
             
             for overlay in overlays:
                 try:
@@ -492,37 +549,113 @@ def render_project(project_data, progress_callback=None):
                     dur = float(overlay.get('duration', 2.0))
                     style = overlay.get('style', 'pop')
                     
-                    # New properties
-                    f_size = overlay.get('fontSize')
+                    # New properties from Frontend
+                    # fontSize is in 'percentage of width' (cqw equivalent)
+                    f_size_pct = overlay.get('fontSize', 4) 
+                    
+                    # Position is % 0-100
                     p_x = overlay.get('positionX')
                     p_y = overlay.get('positionY')
                     t_color = overlay.get('textColor', 'white')
                     font_fam = overlay.get('fontFamily', 'Arial-Bold')
                     
-                    mult = 1.0
-                    if f_size is not None:
-                        try:
-                             mult = float(f_size) / 4.0 # Base 4 is normal
-                        except: pass
-                        
-                    custom_pos = None
-                    if p_x is not None and p_y is not None:
-                        try:
-                            # Convert 0-100 to 0.0-1.0
-                            custom_pos = (float(p_x)/100.0, float(p_y)/100.0)
-                        except: pass
+                    # ========================================
+                    # NORMALIZED COORDINATE SYSTEM (0.0 to 1.0)
+                    # ========================================
+                    # Frontend sends:
+                    #   - fontSize: 0.0-1.0 (% of video HEIGHT)
+                    #   - positionX: 0.0-1.0 (center of text, 0=left, 1=right)
+                    #   - positionY: 0.0-1.0 (center of text, 0=top, 1=bottom)
                     
-                    # Calculate safe max width (80% of video width)
-                    current_w, current_h = final_video.size
-                    max_w = int(current_w * 0.8)
+                    # 1. Calculate Font Size (% of video HEIGHT)
+                    try:
+                        f_norm = float(f_size_pct) if f_size_pct else 0.05
+                    except: 
+                        f_norm = 0.05  # Default 5% of height
+                    
+                    # OLD DATA MIGRATION: If value > 1, assume it's old 0-100 format
+                    if f_norm > 1.0:
+                        f_norm = f_norm / 100.0
+                    
+                    # De-normalize: multiply by video HEIGHT
+                    # VISUAL CORRECTION: Added 1.5x multiplier because "5% height" in 
+                    # standard video rendering looks smaller than "5vh" in CSS due to pixel density/weight.
+                    # This ensures the "Bold Social Media" look.
+                    calc_fontsize = int(vh * f_norm * 1.5)
+                    
+                    # Minimum size for readability
+                    if calc_fontsize < 60: calc_fontsize = 60
+                    
+                    print(f"  📝 Overlay '{content}': fontSize={f_norm:.3f} (norm) * 2.0 -> {calc_fontsize}px, color={t_color}")
 
-                    # Create Text Clip with max_width
-                    txt = create_motion_text(content, duration=dur, style=style, fontsize_mult=mult, pos=custom_pos, color=t_color, font=font_fam, max_width=max_w)
+                    # 2. Parse Position (normalized 0.0 to 1.0)
+                    try:
+                        pos_x = float(p_x) if p_x is not None else 0.5
+                        pos_y = float(p_y) if p_y is not None else 0.8
+                    except:
+                        pos_x, pos_y = 0.5, 0.8  # Default center-bottom
+                    
+                    # OLD DATA MIGRATION: If values > 1, assume old 0-100 format
+                    if pos_x > 1.0:
+                        pos_x = pos_x / 100.0
+                    if pos_y > 1.0:
+                        pos_y = pos_y / 100.0
+                    
+                    print(f"    ↳ Position: ({pos_x:.3f}, {pos_y:.3f}) normalized")
+                    
+                    # 3. Text wrapping
+                    # Only wrap for LONG text. Short text (like "Hey") should be single line
+                    safe_text_width = None
+                    if len(content) > 20:  # Only wrap long text
+                        safe_text_width = int(vw * 0.85)
+                    
+                    # 3. Create Clip - DON'T pass custom position to function
+                    # Let it apply style-based defaults, we'll override with custom position after
+                    txt = create_motion_text(
+                        content, 
+                        duration=dur, 
+                        style=style, 
+                        fontsize=calc_fontsize, 
+                        color=t_color, 
+                        font=font_fam,
+                        pos=None,  # Always None - we handle positioning below
+                        max_width=safe_text_width
+                    )
+                    
                     if txt:
                         txt = txt.with_start(start)
+                        
+                        # 4. DE-NORMALIZE Position: Convert 0-1 to actual pixels
+                        # The position represents where the CENTER of the text should be
+                        tw, th = txt.size
+                        
+                        # De-normalize: multiply by video dimensions
+                        center_x = pos_x * vw
+                        center_y = pos_y * vh
+                        
+                        # Calculate Top-Left coordinate (anchoring at CENTER)
+                        tl_x = center_x - (tw / 2)
+                        tl_y = center_y - (th / 2)
+                        
+                        # Clamp to video bounds
+                        tl_x_original = tl_x
+                        tl_y_original = tl_y
+                        tl_x = max(0, min(tl_x, vw - tw))
+                        tl_y = max(0, min(tl_y, vh - th))
+                        
+                        txt = txt.with_position((tl_x, tl_y))
+                        
+                        # Log with warning if position was clamped
+                        if tl_x != tl_x_original or tl_y != tl_y_original:
+                            print(f"    ⚠️  Position clamped to fit {vw}x{vh} video")
+                        print(f"    ↳ Text size: {tw}x{th}, center: ({center_x:.0f}, {center_y:.0f}) -> top-left: ({tl_x:.0f}, {tl_y:.0f})")
+                        
                         overlay_clips.append(txt)
+                        print(f"  ✅ Added overlay at {start}s for {dur}s")
                 except Exception as e:
-                    print(f"Failed to add overlay {overlay}: {e}")
+                    print(f"❌ Failed to add overlay {overlay}: {e}")
+                    import traceback
+                    traceback.print_exc()
             
             if len(overlay_clips) > 1:
                 # CompositeVideoClip allows layering
@@ -539,6 +672,9 @@ def render_project(project_data, progress_callback=None):
         if bg_music_config and bg_music_config.get('source'):
             try:
                 music_file = bg_music_config['source']
+                print(f"🎵 Processing background music: {music_file}")
+                print(f"   Config: start={bg_music_config.get('start', 0)}, volume={bg_music_config.get('volume', 0.5)}, duration={bg_music_config.get('duration', 'auto')}")
+                
                 # Search paths
                 music_path = os.path.join(UPLOAD_DIR, music_file)
                 if not os.path.exists(music_path):
@@ -548,13 +684,22 @@ def render_project(project_data, progress_callback=None):
                          music_path_alt = os.path.join("projects", safe_name, "source_media", music_file)
                          if os.path.exists(music_path_alt):
                              music_path = music_path_alt
+                             print(f"   Found at: {music_path}")
                 
                 if os.path.exists(music_path):
-                    print(f"🎵 Adding background music: {music_file}")
+                    print(f"   ✅ Loading audio from: {music_path}")
                     bg_music = AudioFileClip(music_path)
+                    print(f"   ✅ Audio loaded: duration={bg_music.duration:.2f}s, fps={bg_music.fps}")
                     
-                    # Handle volume
-                    vol = float(bg_music_config.get('volume', 0.5))
+                    # Handle volume - Check trackVolumes first, then bgMusic.volume
+                    track_volumes = project_data.get('trackVolumes', {})
+                    if 'music' in track_volumes:
+                        vol = float(track_volumes['music'])
+                        print(f"   🔊 Using trackVolumes.music: {vol}")
+                    else:
+                        vol = float(bg_music_config.get('volume', 0.5))
+                        print(f"   🔊 Using bgMusic.volume: {vol}")
+                    
                     bg_music = bg_music.multiply_volume(vol)
                     
                     # Handle Start Time & Duration
@@ -586,8 +731,17 @@ def render_project(project_data, progress_callback=None):
                     bg_music = bg_music.with_start(bg_start)
                     
                     audio_layers.append(bg_music)
+                    print(f"   ✅ Background music added to audio layers (start={bg_start}s, volume={vol})")
+                else:
+                    print(f"   ❌ Music file not found at: {music_path}")
             except Exception as e:
                 print(f"⚠️ Failed to add background music: {e}")
+                import traceback
+                traceback.print_exc()
+        elif bg_music_config:
+            print(f"⚠️ bgMusic config exists but no source: {bg_music_config}")
+        else:
+            print(f"ℹ️  No background music configured")
 
         # 2. Secondary Audio Clips (A2 / SFX / Split Music)
         secondary_clips = project_data.get('audioClips', [])
@@ -641,17 +795,22 @@ def render_project(project_data, progress_callback=None):
                         # Clip if goes beyond video?
                         # if start_time + sfx_clip.duration > final_video.duration:
                         #    sfx_clip = sfx_clip.subclip(0, final_video.duration - start_time)
-                        
+                    
                         audio_layers.append(sfx_clip)
                 except Exception as e:
                     print(f"⚠️ Failed to add secondary clip {clip_data}: {e}")
 
-        # Mix all
+        # H. Final Audio Mixing
+        print(f"🎚️  Mixing {len(audio_layers)} audio layers...")
         if len(audio_layers) > 0:
+             print(f"   Audio layers: {[type(layer).__name__ for layer in audio_layers]}")
              final_audio = CompositeAudioClip(audio_layers)
              final_video = final_video.with_audio(final_audio)
+             print(f"   ✅ Final audio composed and attached to video")
+        else:
+             print(f"   ⚠️  No audio layers to mix - video will be silent!")
         
-        # F. Export to MP4
+        # I. Export to MP4
         timestamp = int(time.time())
         output_filename = f"{project_data.get('name', 'video')}_final_{timestamp}.mp4"
         output_path = os.path.join(EXPORT_DIR, output_filename)

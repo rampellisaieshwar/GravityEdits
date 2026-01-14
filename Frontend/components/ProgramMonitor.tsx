@@ -234,9 +234,14 @@ const ProgramMonitor: React.FC<ProgramMonitorProps> = ({
 
   const activeOverlays = useMemo(() => {
     if (!project?.overlays) return [];
-    return project.overlays.filter(o =>
+    const active = project.overlays.filter(o =>
       currentTime >= o.start && currentTime < (o.start + o.duration)
     );
+    // Debug: Log overlay values
+    if (active.length > 0) {
+      active.forEach(o => console.log(`📝 Overlay "${o.content}": posX=${o.positionX}, posY=${o.positionY}, fontSize=${o.fontSize}, CSS: left=${(o.positionX || 0.5) * 100}%, top=${(o.positionY || 0.8) * 100}%`));
+    }
+    return active;
   }, [project?.overlays, currentTime]);
 
   return (
@@ -270,7 +275,8 @@ const ProgramMonitor: React.FC<ProgramMonitorProps> = ({
       </div>
 
       <div className="flex-1 relative flex flex-col items-center justify-center overflow-hidden bg-black min-h-0">
-        <div className="w-full h-full relative overflow-hidden flex items-center justify-center bg-black" style={{ containerType: 'size' }}>
+        {/* CRITICAL: aspect-ratio: 16/9 locks preview to video proportions */}
+        <div className="w-full h-full relative overflow-hidden flex items-center justify-center bg-black" style={{ containerType: 'size', aspectRatio: '16/9', maxHeight: '100%', maxWidth: '100%' }}>
           {activeClip ? (
             <video
               key={activeClip.clip.source}
@@ -326,57 +332,70 @@ const ProgramMonitor: React.FC<ProgramMonitorProps> = ({
               </span>
             )}
           </div>
-        </div>
 
-        {/* Text Overlays Layer */}
-        <div className="absolute inset-0 pointer-events-none overflow-hidden flex items-center justify-center">
-          <AnimatePresence>
-            {activeOverlays.map(overlay => (
-              <motion.div
-                key={overlay.id}
-                initial={
-                  overlay.style === 'slide_up' ? { y: 100, opacity: 0 } :
-                    overlay.style === 'fade' ? { opacity: 0 } :
-                      { scale: 0.5, opacity: 0 }
-                }
-                animate={
-                  overlay.style === 'slide_up' ? { y: 0, opacity: 1 } :
-                    overlay.style === 'fade' ? { opacity: 1 } :
-                      { scale: 1, opacity: 1 }
-                }
-                exit={
-                  overlay.style === 'slide_up' ? { y: -50, opacity: 0 } :
-                    overlay.style === 'fade' ? { opacity: 0 } :
-                      { scale: 1.2, opacity: 0 }
-                }
-                transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                className={`absolute text-white font-bold drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] text-center px-4`}
-                style={{
-                  fontSize: `${overlay.fontSize || 4}cqw`,
-                  color: overlay.textColor || '#ffffff',
-                  fontFamily: overlay.fontFamily ? overlay.fontFamily.split('-')[0] : 'Arial', // Simple map for preview
-                  textShadow: '2px 2px 0px black, -1px -1px 0 black, 1px -1px 0 black, -1px 1px 0 black, 1px 1px 0 black',
-                  ...(
-                    (overlay.positionX !== undefined && overlay.positionY !== undefined)
-                      ? {
-                        left: `${overlay.positionX}%`,
-                        top: `${overlay.positionY}%`,
-                        transform: 'translate(-50%, -50%)',
-                        width: 'max-content'
-                      }
-                      : overlay.style === 'slide_up' ? { bottom: '20%', left: '50%', transform: 'translateX(-50%)' } :
-                        overlay.style === 'typewriter' ? { bottom: '10%', left: '10%', textAlign: 'left' } :
-                          { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }
-                  )
-                }}
-              >
-                {overlay.content}
-              </motion.div>
-            ))}
-          </AnimatePresence>
+          {/* MOVED INSIDE 16:9 CONTAINER FOR ACCURATE RELATIVE POSITIONING */}
+          {/* Text Overlays Layer */}
+          <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 50 }}>
+            <AnimatePresence>
+              {activeOverlays.map(overlay => (
+                <motion.div
+                  key={overlay.id}
+                  initial={
+                    overlay.style === 'slide_up' ? { y: 100, opacity: 0 } :
+                      overlay.style === 'fade' ? { opacity: 0 } :
+                        { scale: 0.5, opacity: 0 }
+                  }
+                  animate={
+                    overlay.style === 'slide_up' ? { y: 0, opacity: 1 } :
+                      overlay.style === 'fade' ? { opacity: 1 } :
+                        { scale: 1, opacity: 1 }
+                  }
+                  exit={
+                    overlay.style === 'slide_up' ? { y: -50, opacity: 0 } :
+                      overlay.style === 'fade' ? { opacity: 0 } :
+                        { scale: 1.2, opacity: 0 }
+                  }
+                  transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                  className={`text-white font-bold drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] text-center px-4 whitespace-normal`}
+                  style={{
+                    position: 'absolute',
+                    zIndex: 20,
+
+                    // 1. CONVERT TO PERCENTAGE
+                    left: (() => {
+                      const x = overlay.positionX ?? 0.5;
+                      return x > 1 ? `${x}%` : `${x * 100}%`;
+                    })(),
+                    top: (() => {
+                      const y = overlay.positionY ?? 0.5;
+                      return y > 1 ? `${y}%` : `${y * 100}%`;
+                    })(),
+
+                    // 2. CENTER ANCHOR
+                    transform: 'translate(-50%, -50%)',
+
+                    // 3. SCALE FONT (Using 2.0x boosted cqh logic, fallback to rem if needed)
+                    // Note: Since we are now inside container-type: size, 'cqh' is perfect.
+                    fontSize: (overlay.fontSize || 0.08) > 1
+                      ? `${overlay.fontSize}cqw`
+                      : `${(overlay.fontSize || 0.08) * 100 * 2.0}cqh`,
+
+                    color: overlay.textColor || '#ffffff',
+                    fontFamily: overlay.fontFamily ? overlay.fontFamily.split('-')[0] : 'Arial',
+                    textShadow: '2px 2px 0px black, -1px -1px 0 black, 1px -1px 0 black, -1px 1px 0 black, 1px 1px 0 black',
+                    maxWidth: '90%',
+                    overflowWrap: 'break-word',
+                    width: 'auto',
+                    pointerEvents: 'none'
+                  }}
+                >
+                  {overlay.content}
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
         </div>
       </div>
-
 
       {/* Multi-Track Audio Layer - Robust Sync */}
       {(() => {

@@ -22,3 +22,6 @@ uploads/
 exports/
 projects/
 processing/
+
+*.log
+temp_assets/

@@ -11,6 +11,9 @@ from pydantic import BaseModel
 import uuid
 import time
 from datetime import datetime
+from rq.job import Job
+from rq.exceptions import NoSuchJobError
+from .redis_config import redis_conn, q_render, q_analysis
 
 # Import our modules
 try:
@@ -22,39 +25,6 @@ except ImportError:
     import renderer
     import chat_engine
 
-# Global job store
-render_jobs: Dict[str, Any] = {}
-
-def run_export_job(job_id: str, project_data: dict, output_dir: str):
-    def progress_callback(data=None, **kwargs):
-        if data is None: data = kwargs
-        if not isinstance(data, dict): pass
-        if isinstance(data, dict) and kwargs and data is not kwargs: data.update(kwargs)
-
-        if job_id in render_jobs and isinstance(data, dict):
-            render_jobs[job_id].update(data)
-            
-    try:
-        render_jobs[job_id]["status"] = "processing"
-        
-        # Patch renderer if needed to support output_dir or just let it write to EXPORT_DIR and move?
-        # For now, let's keep exports separate or move them.
-        # Actually renderer writes to EXPORT_DIR by default. Let's leave strict projects structure for source/analysis for now.
-        
-        output_file_path = renderer.render_project(project_data, progress_callback=progress_callback)
-        if output_file_path:
-            filename = os.path.basename(output_file_path)
-            # If we want scoped exports, we'd move it here. 
-            # For simplicity, keep all exports in /exports for public access via static mount
-            url = f"/exports/{filename}"
-            render_jobs[job_id].update({"status": "completed", "url": url, "progress": 100, "message": "Render Complete"})
-        else:
-            render_jobs[job_id].update({"status": "failed", "message": "Rendering produced no output"})
-    except Exception as e:
-        print(f"Export Job Failed: {e}")
-        import traceback
-        traceback.print_exc()
-        render_jobs[job_id].update({"status": "failed", "message": str(e)})
 
 app = FastAPI()
 
@@ -269,27 +239,9 @@ class AnalyzeRequest(BaseModel):
     description: Optional[str] = None
     api_key: Optional[str] = None
 
-# Analysis job store
-analysis_jobs: Dict[str, Any] = {}
-
-def run_analysis_job(job_id: str, video_paths: List[str], project_name: str, output_dir: str, user_description: Optional[str] = None, api_key: str = None):
-    try:
-        analysis_jobs[job_id]["status"] = "processing"
-        def progress_callback(progress, message):
-            analysis_jobs[job_id]["progress"] = progress
-            analysis_jobs[job_id]["message"] = message
-
-        ai_engine.process_batch_pipeline(video_paths, project_name, output_dir=output_dir, progress_callback=progress_callback, user_description=user_description, api_key=api_key)
-        analysis_jobs[job_id]["status"] = "completed"
-        analysis_jobs[job_id]["progress"] = 100
-    except Exception as e:
-        print(f"Analysis Job Failed: {e}")
-        import traceback
-        traceback.print_exc()
-        analysis_jobs[job_id].update({"status": "failed", "message": str(e)})
 
 @app.post("/analyze/")
-async def analyze_project(request: AnalyzeRequest, background_tasks: BackgroundTasks):
+async def analyze_project(request: AnalyzeRequest):
     # Determine paths based on whether project exists in new structure
     project_path = get_project_path(request.project_name)
     
@@ -297,6 +249,23 @@ async def analyze_project(request: AnalyzeRequest, background_tasks: BackgroundT
     if not os.path.exists(project_path):
         os.makedirs(project_path, exist_ok=True)
     output_dir = project_path
+
+    # PERSIST DESCRIPTION
+    if request.description:
+        manifest_path = os.path.join(project_path, "project.json")
+        meta = {}
+        if os.path.exists(manifest_path):
+            try:
+                with open(manifest_path, 'r') as f: meta = json.load(f)
+            except: pass
+        
+        meta["description"] = request.description
+        # ensure other fields exist if creating new
+        if "name" not in meta: meta["name"] = request.project_name
+        if "created_at" not in meta: meta["created_at"] = datetime.now().isoformat()
+        
+        with open(manifest_path, "w") as f:
+            json.dump(meta, f)
 
     if os.path.exists(os.path.join(project_path, "source_media")):
         source_dir = os.path.join(project_path, "source_media")
@@ -322,20 +291,50 @@ async def analyze_project(request: AnalyzeRequest, background_tasks: BackgroundT
             
     video_paths = verified_paths
 
-    # Run AI Pipeline
-    job_id = str(uuid.uuid4())
-    analysis_jobs[job_id] = {"status": "queued", "progress": 0, "message": "Queued"}
-    
-    print(f"DEBUG: Starting Analysis Job {job_id} with paths: {video_paths}")
-    background_tasks.add_task(run_analysis_job, job_id, video_paths, request.project_name, output_dir, request.description, api_key=request.api_key)
-    
-    return {"status": "queued", "job_id": job_id, "message": "AI Analysis started"}
+    # Run AI Pipeline via Redis Queue
+    if not q_analysis:
+        raise HTTPException(status_code=503, detail="Analysis Queue Service Unavailable (Redis)")
+
+    try:
+        # Enqueue job
+        job = q_analysis.enqueue(
+            "backend.worker.tasks.perform_analysis_task",
+            video_paths, 
+            request.project_name, 
+            output_dir, 
+            request.description, 
+            api_key=request.api_key,
+            job_timeout='30m'
+        )
+        
+        print(f"DEBUG: Start Analysis Job {job.id}")
+        return {"status": "queued", "job_id": job.id, "message": "AI Analysis started"}
+    except Exception as e:
+        print(f"Failed to enqueue analysis: {e}")
+        raise HTTPException(status_code=500, detail=f"Queue Error: {str(e)}")
 
 @app.get("/analysis-status/{job_id}")
 async def get_analysis_status(job_id: str):
-    if job_id not in analysis_jobs:
+    if not redis_conn:
+        raise HTTPException(status_code=503, detail="Redis Unavailable")
+        
+    try:
+        job = Job.fetch(job_id, connection=redis_conn)
+        status = job.get_status()
+        
+        # Build response from meta + status
+        response = job.meta
+        response["status"] = status
+        
+        # Map RQ statuses to API statuses
+        if status == "started": response["status"] = "processing"
+        if status == "finished": response["status"] = "completed"
+        
+        return response
+    except NoSuchJobError:
         raise HTTPException(status_code=404, detail="Job not found")
-    return analysis_jobs[job_id]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/projects/{project_name}/edl")
 async def get_project_edl(project_name: str):
@@ -357,45 +356,136 @@ async def get_project_analysis(project_name: str):
         return FileResponse(file_path, media_type='application/json')
     return JSONResponse(status_code=404, content={"detail": "Analysis not found yet"})
 
+class RegenerateRequest(BaseModel):
+    instruction: Optional[str] = None
+    api_key: Optional[str] = None
+
+@app.post("/api/projects/{project_name}/regenerate-xml")
+async def regenerate_project_xml(project_name: str, request: Optional[RegenerateRequest] = None):
+    project_path = get_project_path(project_name)
+    analysis_path = os.path.join(project_path, f"{project_name}_analysis.json")
+    output_xml_path = os.path.join(project_path, f"{project_name}.xml")
+    
+    if not os.path.exists(analysis_path):
+         # Try legacy Uploads path
+         legacy_path = os.path.join(UPLOAD_DIR, f"{project_name}_analysis.json")
+         if os.path.exists(legacy_path):
+             analysis_path = legacy_path
+         else:
+             raise HTTPException(status_code=404, detail="Analysis file not found. Please run analysis first.")
+
+    try:
+        with open(analysis_path, 'r') as f:
+            project_data = json.load(f)
+            
+        # Get Description from project.json if available to pass as context
+        user_description = None
+        
+        # 1. Prefer explicit instruction from request
+        if request and request.instruction:
+            user_description = request.instruction
+        else:
+            # 2. Fallback to stored project description
+            manifest_path = os.path.join(project_path, "project.json")
+            if os.path.exists(manifest_path):
+                with open(manifest_path, 'r') as f:
+                     meta = json.load(f)
+                     user_description = meta.get("description")
+        
+        api_key_to_use = request.api_key if request else None
+
+        # Regenerate
+        success = ai_engine.generate_xml_edl(project_data, output_xml_path, project_name, user_description=user_description, api_key=api_key_to_use)
+        
+        if not success:
+            raise HTTPException(status_code=500, detail="AI Generation Failed. Fallback XML was generated, but AI features (shorts, overlays) are missing. Please check server logs (likely missing GEMINI_API_KEY).")
+
+        return {"status": "success", "message": "XML Regenerated", "path": output_xml_path}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 class ExportRequest(BaseModel):
     project: dict 
 
 @app.post("/export-video/")
-async def export_video(request: ExportRequest, background_tasks: BackgroundTasks):
+async def export_video(request: ExportRequest):
+    if not q_render:
+         return {"error": "Render Service Unavailable (Redis Queue)"}
+    
     try:
-        if hasattr(renderer, 'render_project'):
-            job_id = str(uuid.uuid4())
-            render_jobs[job_id] = {"status": "queued", "progress": 0, "message": "Queued"}
-            
-            # DEBUG: Log payload to verify 'text' field
-            try:
-                debug_path = os.path.join(os.getcwd(), "debug_payload.log")
-                with open(debug_path, "w") as f:
-                    clips = request.project.get('clips', [])
-                    f.write(f"Export Request for {request.project.get('name')}\n")
-                    f.write(f"Total Clips: {len(clips)}\n")
-                    f.write(f"Total Overlays: {len(request.project.get('overlays', []))}\n")
-                    if clips:
-                        first_clip = clips[0]
-                        f.write(f"First Clip Sample: {first_clip}\n")
-                        f.write(f"Has Text? {'text' in first_clip} -> {first_clip.get('text')}\n")
-            except Exception as ex:
-                print(f"Failed to log debug payload: {ex}")
+        # Enqueue job
+        job = q_render.enqueue(
+            "backend.worker.tasks.perform_export_task",
+            request.project, 
+            EXPORT_DIR,
+            job_timeout='1h'
+        )
+        
+        # DEBUG: Log payload
+        try:
+            debug_path = os.path.join(os.getcwd(), "debug_payload.log")
+            with open(debug_path, "w") as f:
+                clips = request.project.get('clips', [])
+                f.write(f"Export Job Enqueued: {job.id}\n")
+                f.write(f"Total Clips: {len(clips)}\n")
+        except: pass
 
-            # FUTURE: Pass output_dir if we want exports in project folder
-            background_tasks.add_task(run_export_job, job_id, request.project, EXPORT_DIR)
-            
-            return {"status": "queued", "job_id": job_id}
-        else:
-             return {"error": "Renderer not implemented"}
+        return {"status": "queued", "job_id": job.id}
     except Exception as e:
+        print(f"Failed to enqueue export: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/export-status/{job_id}")
 async def get_export_status(job_id: str):
-    if job_id not in render_jobs:
+    if not redis_conn:
+        raise HTTPException(status_code=503, detail="Redis Unavailable")
+        
+    try:
+        job = Job.fetch(job_id, connection=redis_conn)
+        status = job.get_status()
+        
+        response = job.meta or {}
+        response["status"] = status
+        
+        if status == "started": response["status"] = "processing"
+        if status == "finished": response["status"] = "completed"
+        if status == "failed": response["status"] = "failed"
+        
+        return response
+    except NoSuchJobError:
         raise HTTPException(status_code=404, detail="Job not found")
-    return render_jobs[job_id]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/cancel-export/{job_id}")
+async def cancel_export_job(job_id: str):
+    if not redis_conn:
+        raise HTTPException(status_code=503, detail="Redis Unavailable")
+        
+    try:
+        job = Job.fetch(job_id, connection=redis_conn)
+        job.cancel()
+        return {"status": "cancelling", "message": "Job cancellation requested"}
+    except NoSuchJobError:
+        raise HTTPException(status_code=404, detail="Job not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/projects/{project_name}/chat-history")
+async def get_project_chat_history(project_name: str):
+    project_path = get_project_path(project_name)
+    history_file = os.path.join(project_path, "chat_history.json")
+    
+    if os.path.exists(history_file):
+        try:
+            with open(history_file, 'r') as f:
+                data = json.load(f)
+                return data
+        except Exception:
+            return []
+    return []
 
 class ChatRequest(BaseModel):
     query: str

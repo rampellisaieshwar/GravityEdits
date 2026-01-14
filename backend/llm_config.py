@@ -1,5 +1,9 @@
 
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 # LLM Configuration
 # Change these values to switch models or providers globally

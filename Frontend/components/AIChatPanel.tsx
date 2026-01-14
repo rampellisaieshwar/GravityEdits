@@ -262,9 +262,68 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ project, onProjectUpdate, onU
                     }
                 }
 
+                // 9. REGENERATE PROJECT (Re-Edit)
+                const regenMatch = codeBlock.match(/regenerate_project\(instruction=['"](.*)['"]\)/);
+                if (regenMatch) {
+                    const instruction = regenMatch[1];
+                    const apiKey = localStorage.getItem("gravity_api_key");
+
+                    if (project) {
+                        setChatHistory(prev => [...prev, { role: 'assistant', content: "🔄 AI is re-thinking the edit based on your instruction..." }]);
+
+                        try {
+                            // 1. Trigger Regeneration
+                            const regenRes = await fetch(`${API_BASE_URL}/api/projects/${project.name}/regenerate-xml`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ instruction: instruction, api_key: apiKey })
+                            });
+
+                            if (!regenRes.ok) throw new Error("Regeneration failed");
+
+                            // 2. Fetch New Data
+                            const [edlRes, analysisRes] = await Promise.all([
+                                fetch(`${API_BASE_URL}/api/projects/${project.name}/edl`),
+                                fetch(`${API_BASE_URL}/api/projects/${project.name}/analysis`)
+                            ]);
+
+                            if (edlRes.ok) {
+                                const xmlText = await edlRes.text();
+                                const analysisData = analysisRes.ok ? await analysisRes.json() : null;
+
+                                // 3. Parse and Reload
+                                // We need to import parseEDLXml. Since we can't easily change imports in this block, 
+                                // we assume it is available or we do a dynamic import if supported, 
+                                // BUT simpler is to just reload the page or ask user to reload.
+                                // HOWEVER, to offer a smooth experience, let's try to parse if we can access the util.
+                                // Ideally, we should have imported it. 
+                                // Let's try to assume the user of this tool (Antigravity) has added the import at the top.
+
+                                const { parseEDLXml } = await import('../utils/xmlParser');
+                                const newProj = parseEDLXml(xmlText, analysisData);
+
+                                if (newProj) {
+                                    newProj.name = project.name;
+                                    if (onProjectUpdate) onProjectUpdate(newProj);
+                                    successMessage = "✨ Project re-edited successfully!";
+                                } else {
+                                    failureMessage = "❌ Failed to parse new project data.";
+                                }
+                            } else {
+                                failureMessage = "❌ Failed to load new project files.";
+                            }
+                        } catch (e) {
+                            console.error(e);
+                            failureMessage = "❌ Error during regeneration: " + (e as Error).message;
+                        }
+                    } else {
+                        failureMessage = "❌ No active project.";
+                    }
+                }
+
                 if (successMessage && onProjectUpdate) {
                     // Update state ONLY if not undoing (undo handles its own state)
-                    if (!codeBlock.includes('undo_action()')) {
+                    if (!codeBlock.includes('undo_action()') && !codeBlock.includes('regenerate_project')) {
                         onProjectUpdate(newProject);
                     }
                     setChatHistory(prev => [...prev, { role: 'assistant', content: successMessage! }]);
@@ -274,6 +333,7 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ project, onProjectUpdate, onU
                     // No recognized command matched
                     setChatHistory(prev => [...prev, { role: 'assistant', content: aiResponse }]);
                 }
+
             } else {
                 setChatHistory(prev => [...prev, { role: 'assistant', content: aiResponse }]);
             }

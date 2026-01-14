@@ -229,6 +229,13 @@ class ChatEngine:
             ```tool_code
             gravity_ai.undo_action()
             ```
+
+            8. REGENERATE PROJECT (Re-Edit):
+            - Use this if the user asks to "re-analyze", "re-edit", "remake", or "start over with instruction".
+            - useful for broad style changes like "make it faster", "focus on X", "remove bad clips".
+            ```tool_code
+            gravity_ai.regenerate_project(instruction="Make it fast paced and focus on the dog")
+            ```
             
             PERMISSIONS & TERMINOLOGY:
             - **YOU HAVE FULL PERMISSION TO EDIT.**

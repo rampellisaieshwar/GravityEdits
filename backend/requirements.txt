@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+redis
+rq
+python-multipart
+moviepy
+openai
+opencv-python-headless
+pydantic
+requests
+google-generativeai

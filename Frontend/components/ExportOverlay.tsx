@@ -49,6 +49,9 @@ const ExportOverlay: React.FC<ExportOverlayProps> = ({ onClose, project, initial
           alert("Render failed: " + data.message);
           setStatus('idle');
           setJobId(null);
+        } else if (data.status === 'cancelled') {
+          setJobId(null);
+          onClose();
         }
       } catch (e) {
         console.error("Polling error", e);
@@ -267,6 +270,25 @@ const ExportOverlay: React.FC<ExportOverlayProps> = ({ onClose, project, initial
                   animate={{ width: `${progress}%` }}
                 />
               </div>
+            </div>
+
+            <div className="flex justify-center">
+              <button
+                onClick={async () => {
+                  if (jobId) {
+                    if (confirm("Are you sure you want to stop the rendering?")) {
+                      setLogs(prev => [...prev, "Stopping..."]);
+                      try {
+                        await fetch(`${API_BASE_URL}/cancel-export/${jobId}`, { method: 'POST' });
+                        onClose(); // Go back to editor immediately
+                      } catch (e) { console.error(e) }
+                    }
+                  }
+                }}
+                className="text-gray-500 hover:text-red-500 text-xs font-bold uppercase transition-colors"
+              >
+                Stop Rendering
+              </button>
             </div>
           </div>
         )}

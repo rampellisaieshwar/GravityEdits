@@ -10,6 +10,7 @@ interface TimelineProps {
   currentTime: number;
   onSelectClip: (id: string) => void;
   onToggleStatus: (id: string) => void;
+  onDeleteClip?: (id: string) => void;
   onReorder: (newClips: Clip[]) => void;
   onSeek: (time: number) => void;
   onScrubStart?: () => void;
@@ -24,8 +25,10 @@ interface TimelineProps {
   onAddOverlay: (start: number) => void;
   onSelectOverlay?: (id: string) => void;
   selectedOverlayId?: string | null;
+  onDeleteOverlay?: (id: string) => void;
   onUpdateBgMusic: (updates: { start?: number, duration?: number }) => void;
   onUpdateAudioClip?: (id: string, updates: Partial<any>) => void;
+  onDeleteAudioClip?: (id: string) => void;
   onSplitAudioClip?: (id: string, offset: number) => void;
   onSplitBgMusic?: (offset: number) => void;
 }
@@ -38,15 +41,18 @@ const TimelineTracks = React.memo(({
   onReorder,
   onSelectClip,
   onToggleStatus,
+  onDeleteClip,
   activeTool,
   onSplit,
   onAddAudioClip,
   onVolumeChange,
   onUpdateOverlay,
+  onDeleteOverlay,
   onSelectOverlay,
   selectedOverlayId,
   onUpdateBgMusic,
   onUpdateAudioClip,
+  onDeleteAudioClip,
   onSplitAudioClip,
   onSplitBgMusic
   // Note: onVolumeChange was missing in previous destructuring but present in type
@@ -59,13 +65,16 @@ const TimelineTracks = React.memo(({
   onReorder: (newClips: Clip[]) => void;
   onSelectClip: (id: string) => void;
   onToggleStatus: (id: string) => void;
+  onDeleteClip?: (id: string) => void;
   activeTool: 'select' | 'razor';
   onSplit: (id: string, offset: number) => void;
   onAddAudioClip: (source: string, time: number, track: number) => void;
   onVolumeChange: (track: string, volume: number) => void;
   onUpdateOverlay: (id: string, updates: Partial<TextOverlay>) => void;
+  onDeleteOverlay?: (id: string) => void;
   onUpdateBgMusic: (updates: { start?: number, duration?: number }) => void;
   onUpdateAudioClip?: (id: string, updates: Partial<any>) => void;
+  onDeleteAudioClip?: (id: string) => void;
   onSplitAudioClip?: (id: string, offset: number) => void;
   onSplitBgMusic?: (offset: number) => void;
 }) => {
@@ -73,7 +82,7 @@ const TimelineTracks = React.memo(({
   const overlays = project.overlays || [];
 
   // Create a local object for easier access in callbacks where simple access is needed
-  const props = { onUpdateAudioClip, onSplitAudioClip, onSplitBgMusic };
+  const props = { onUpdateAudioClip, onSplitAudioClip, onSplitBgMusic, onDeleteAudioClip };
 
   return (
     <div className="p-4 flex flex-col gap-1 w-max min-w-full">
@@ -124,6 +133,23 @@ const TimelineTracks = React.memo(({
               }`}
           >
             <div className="font-bold truncate pointer-events-none">{overlay.content}</div>
+
+            {/* Delete Button */}
+            {onDeleteOverlay && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (confirm(`Delete text overlay "${overlay.content}"?`)) {
+                    onDeleteOverlay(overlay.id);
+                  }
+                }}
+                className="absolute top-0 right-0 w-5 h-5 bg-red-500/80 hover:bg-red-600 rounded-bl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold z-30"
+                title="Delete overlay"
+              >
+                ×
+              </button>
+            )}
+
             {/* Resize Handle (Right) - Simplified */}
             <div
               className="absolute right-0 top-0 bottom-0 w-2 cursor-e-resize hover:bg-white/20"
@@ -169,7 +195,7 @@ const TimelineTracks = React.memo(({
             }}
             onDoubleClick={(e) => { e.stopPropagation(); onToggleStatus(clip.id); }}
             style={{ width: `${(clip.duration || 5) * zoom}px` }}
-            className={`relative shrink-0 flex flex-col justify-between p-2 transition-shadow border-y border-x border-transparent ${activeTool === 'select' ? 'cursor-grab active:cursor-grabbing' : 'cursor-crosshair'} ${selectedClipId === clip.id ? 'ring-2 ring-white z-10' : ''
+            className={`relative shrink-0 flex flex-col justify-between p-2 transition-shadow border-y border-x border-transparent group ${activeTool === 'select' ? 'cursor-grab active:cursor-grabbing' : 'cursor-crosshair'} ${selectedClipId === clip.id ? 'ring-2 ring-white z-10' : ''
               } ${clip.keep
                 ? 'bg-blue-600/80 hover:bg-blue-500 border-blue-400'
                 : 'bg-red-900/20 hover:bg-red-900/30 opacity-60 border-red-900/30'
@@ -189,6 +215,22 @@ const TimelineTracks = React.memo(({
             <div className="text-[8px] text-white/50 truncate pointer-events-none">
               {formatDuration(clip.duration || 0)}
             </div>
+
+            {/* Delete Button for Video Clips */}
+            {onDeleteClip && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (confirm(`Delete clip "${clip.source}"?`)) {
+                    onDeleteClip(clip.id);
+                  }
+                }}
+                className="absolute top-0 right-0 w-5 h-5 bg-red-500/80 hover:bg-red-600 rounded-bl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold z-30"
+                title="Delete clip"
+              >
+                ×
+              </button>
+            )}
 
             {/* Selection handle indicator */}
             {selectedClipId === clip.id && (
@@ -279,7 +321,7 @@ const TimelineTracks = React.memo(({
                   /* @ts-ignore */
                   if (props.onUpdateAudioClip) props.onUpdateAudioClip(clip.id, { start: newStart });
                 }}
-                className="absolute top-1 bottom-1 bg-teal-800/60 border border-teal-500/50 rounded px-2 overflow-hidden text-[9px] text-teal-100 flex items-center shadow-lg cursor-pointer hover:bg-teal-700/80 active:cursor-grabbing"
+                className="absolute top-1 bottom-1 bg-teal-800/60 border border-teal-500/50 rounded px-2 overflow-hidden text-[9px] text-teal-100 flex items-center shadow-lg cursor-pointer hover:bg-teal-700/80 active:cursor-grabbing group"
                 style={{
                   x: clip.start * zoom,
                   width: `${Math.max(20, clip.duration * zoom)}px`,
@@ -302,6 +344,22 @@ const TimelineTracks = React.memo(({
                 }}
               >
                 <span className="truncate pointer-events-none">{clip.source}</span>
+
+                {/* Delete Button for Audio Clips */}
+                {onDeleteAudioClip && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (confirm(`Delete audio clip "${clip.source}"?`)) {
+                        onDeleteAudioClip(clip.id);
+                      }
+                    }}
+                    className="absolute top-0 right-0 w-5 h-5 bg-red-500/80 hover:bg-red-600 rounded-bl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold z-30"
+                    title="Delete audio clip"
+                  >
+                    ×
+                  </button>
+                )}
               </motion.div>
             )
           ))}
@@ -373,6 +431,7 @@ const Timeline: React.FC<TimelineProps> = ({
   onSelectClip,
   onSelectOverlay,
   onToggleStatus,
+  onDeleteClip,
   onReorder,
   onSeek,
   onScrubStart,
@@ -385,8 +444,10 @@ const Timeline: React.FC<TimelineProps> = ({
   onVolumeChange,
   onUpdateOverlay,
   onAddOverlay,
+  onDeleteOverlay,
   onUpdateBgMusic,
   onUpdateAudioClip,
+  onDeleteAudioClip,
   onSplitAudioClip,
   onSplitBgMusic
 }) => {
@@ -659,11 +720,14 @@ const Timeline: React.FC<TimelineProps> = ({
             onSelectClip={onSelectClip}
             onSelectOverlay={onSelectOverlay}
             onToggleStatus={onToggleStatus}
+            onDeleteClip={onDeleteClip}
             activeTool={activeTool}
             onSplit={onSplitClip}
             onUpdateOverlay={onUpdateOverlay}
+            onDeleteOverlay={onDeleteOverlay}
             onUpdateBgMusic={onUpdateBgMusic}
             onUpdateAudioClip={onUpdateAudioClip}
+            onDeleteAudioClip={onDeleteAudioClip}
             onSplitAudioClip={onSplitAudioClip}
             onSplitBgMusic={onSplitBgMusic}
           />
