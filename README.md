@@ -4,7 +4,7 @@ Gravity Edits is a modern, AI-powered video editing platform designed to streaml
 
 ## 🚀 Key Features
 
-*   **🤖 Agentic AI Editor**: A fully autonomous AI (Gemini 1.5 Pro) that acts as a pair programmer for your video.
+*   **🤖 Agentic AI Editor**: A fully autonomous AI (Gemini 2.5 Pro) that acts as a pair programmer for your video.
     *   **Natural Language Editing**: Command the AI to "Cut the part about bananas," "Add a Subscribe text at 5s," or "Fix the transcript."
     *   **Command System**: The AI emits structured commands (Cut, Split, Add Text, Move) that are executed deterministically.
     *   **Intelligent Resolution**: It understands context. "Make it red" means Reject. "Make it Green" means Keep. It finds clips by content automatically.
