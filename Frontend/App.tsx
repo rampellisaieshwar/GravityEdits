@@ -125,8 +125,37 @@ const App: React.FC = () => {
   // Listen for Settings Open Event (from Landing Page)
   useEffect(() => {
     const handleOpenSettings = () => setIsSettingsOpen(true);
+
+    const handleReload = async (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail && detail.name) {
+        // Re-fetch logic similar to session restore
+        try {
+          const edlRes = await fetch(`${API_BASE_URL}/api/projects/${detail.name}/edl`);
+          const analysisRes = await fetch(`${API_BASE_URL}/api/projects/${detail.name}/analysis`);
+
+          if (edlRes.ok) {
+            const xml = await edlRes.text();
+            const meta = analysisRes.ok ? await analysisRes.json() : null;
+            const proj = parseEDLXml(xml, meta);
+            if (proj) {
+              proj.name = detail.name;
+              setProject(proj);
+              console.log("Project reloaded via event!");
+            }
+          }
+        } catch (err) {
+          console.error("Reload failed", err);
+        }
+      }
+    };
+
     window.addEventListener('openAPISettings', handleOpenSettings);
-    return () => window.removeEventListener('openAPISettings', handleOpenSettings);
+    window.addEventListener('projectReloadNeeded', handleReload);
+    return () => {
+      window.removeEventListener('openAPISettings', handleOpenSettings);
+      window.removeEventListener('projectReloadNeeded', handleReload);
+    };
   }, []);
 
   // -- LANDING PAGE HANDLERS --

@@ -165,11 +165,11 @@ async def upload_batch(
             with open(file_path, "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
             
-            try:
-                # Try getting video duration (opencv)
-                duration = get_video_duration(file_path)
-            except:
-                duration = 0
+            print(f"File saved: {file_path}")
+            
+            # OPTIMIZATION: Skip duration check to prevent OpenCV hangs during upload
+            # duration = get_video_duration(file_path)
+            duration = 0
             
             # If it's 0 and looks like audio, we can try moviepy later or just leave it
             # For now 0 is fine, Frontend handles it (defaulting to 5s visual or looping music)

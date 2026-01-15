@@ -295,18 +295,42 @@ def generate_xml_edl(project_data, output_path, project_name="Project", user_des
         </project>
         """
         
-        # Call Gemini (Standard SDK)
-        # Using 'gemini-pro' as safer fallback for older SDK versions
-        model = genai.GenerativeModel("gemini-pro")
-        response = model.generate_content(prompt)
-        
-        # Clean Output
-        # Handle potential safety block or empty response
-        if not response.text:
-             print("AI returned empty response (Safety Block?)")
-             raise ValueError("AI Safety Block")
+        if not api_key:
+             print("Missing API Key for Gemini")
+             return False
 
-        xml_out = response.text.replace("```xml", "").replace("```", "").strip()
+        # RAW REST API CALL (Bypass SDK issues)
+        def call_gemini_api(prompt, key):
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={key}"
+            headers = {"Content-Type": "application/json"}
+            data = {
+                "contents": [{"parts": [{"text": prompt}]}]
+            }
+            try:
+                resp = requests.post(url, headers=headers, json=data)
+                if resp.status_code != 200:
+                    print(f"Gemini API Error {resp.status_code}: {resp.text}")
+                    return None
+                
+                result = resp.json()
+                try:
+                    return result["candidates"][0]["content"]["parts"][0]["text"]
+                except:
+                    print(f"Unexpected response structure: {result}")
+                    return None
+            except Exception as e:
+                print(f"REST Request failed: {e}")
+                return None
+
+        print("Sending request via REST API...")
+        response_text = call_gemini_api(prompt, api_key)
+        
+        if not response_text:
+             print("AI returned empty or error.")
+             # Fallback?
+             return False
+
+        xml_out = response_text.replace("```xml", "").replace("```", "").strip()
         
         with open(output_path, "w") as f:
             f.write(xml_out)
