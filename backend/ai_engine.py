@@ -254,8 +254,10 @@ def generate_xml_edl(project_data, output_path, project_name="Project", user_des
         - Colors: Yellow (#FFFF00) for emphasis, White (#FFFFFF) for standard.
         
         STEP 5: VIRAL SHORTS (The Hook)
-        - Identify 2 separate sequences (15s-60s) that act as standalone viral shorts.
+        - YOU MUST Identify at least 2 separate sequences (15s-60s) that act as standalone viral shorts.
+        - Even if the footage is boring, find the best contiguous segments (e.g., a funny mistake or the most energetic part).
         - Add them to the <viral_shorts> section.
+        - Ensure 'clip_ids' corresponds to the 'id' attributes of the clips you kept in the EDL.
         
         ---------------------------------------------------------
         OUTPUT FORMAT (Strict XML):
@@ -331,7 +333,20 @@ def generate_xml_edl(project_data, output_path, project_name="Project", user_des
         edl_content += '      <color_grading>\n        <temperature>5600</temperature>\n        <exposure>0</exposure>\n        <contrast>0</contrast>\n        <saturation>100</saturation>\n        <filter_strength>100</filter_strength>\n      </color_grading>\n'
         edl_content += '    </clip>\n'
         
-    edl_content += '  </edl>\n  <viral_shorts>\n  </viral_shorts>\n  <overlays>\n  </overlays>\n</project>'
+    edl_content += '  </edl>\n'
+    
+    # Generate a fallback Viral Short using the first few kept clips
+    kept_ids = [str(c.get("id")) for c in project_data.get("timeline", []) if c.get("visual_data", {}).get("brightness") != "dark"][:3]
+    kept_ids_str = ",".join(kept_ids) if kept_ids else "1,2,3"
+    
+    edl_content += f'''  <viral_shorts>
+    <short>
+      <title>Best Moments (Fallback)</title>
+      <clip_ids>{kept_ids_str}</clip_ids>
+    </short>
+  </viral_shorts>
+'''
+    edl_content += '  <overlays>\n  </overlays>\n</project>'
     
     with open(output_path, "w") as f:
         f.write(edl_content)
