@@ -185,18 +185,51 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ project, onProjectUpdate, onU
                     const clean = (s: string) => s.toLowerCase().replace(/[.,!?]/g, '');
 
                     if (clip && clip.words) {
-                        // Find the word occurrence
-                        const foundWord = clip.words.find(w =>
-                            clean(w.word) === clean(targetWord) ||
-                            clean(w.word).includes(clean(targetWord))
-                        );
+                        // Phrase Matching Logic
+                        const targetTokens = clean(targetWord).split(/\s+/);
+                        let matchStart = -1;
+                        let matchEnd = -1;
+                        let matchedPhrase = "";
 
-                        if (foundWord) {
-                            handleRemoveSegment(id, foundWord.start, foundWord.end);
-                            successMessage = `✂️ Found "${foundWord.word}" at ${foundWord.start}s and removed it.`;
+                        for (let i = 0; i < clip.words.length; i++) {
+                            // Check if sequence starts here
+                            let match = true;
+                            for (let j = 0; j < targetTokens.length; j++) {
+                                if (i + j >= clip.words.length) { match = false; break; }
+                                const w = clip.words[i + j];
+                                if (clean(w.word) !== targetTokens[j]) {
+                                    // Try loose match (inclusion)
+                                    if (!clean(w.word).includes(targetTokens[j])) {
+                                        match = false;
+                                        break;
+                                    }
+                                }
+                            }
+
+                            if (match) {
+                                matchStart = clip.words[i].start;
+                                matchEnd = clip.words[i + targetTokens.length - 1].end;
+                                matchedPhrase = clip.words.slice(i, i + targetTokens.length).map(w => w.word).join(" ");
+                                break;
+                            }
+                        }
+
+                        if (matchStart !== -1) {
+                            handleRemoveSegment(id, matchStart, matchEnd);
+                            successMessage = `✂️ Found phrase "${matchedPhrase}" (${matchStart.toFixed(2)}s - ${matchEnd.toFixed(2)}s) and removed it.`;
                         } else {
-                            // Backup: Try finding in main text if words missing
-                            failureMessage = `❌ Cloud not find word "${targetWord}" in clip ${id} data.`;
+                            // Fallback: Single word find (original logic) if phrase fails
+                            const foundWord = clip.words.find(w =>
+                                clean(w.word) === clean(targetWord) ||
+                                clean(w.word).includes(clean(targetWord))
+                            );
+
+                            if (foundWord) {
+                                handleRemoveSegment(id, foundWord.start, foundWord.end);
+                                successMessage = `✂️ Found single word "${foundWord.word}" at ${foundWord.start.toFixed(2)}s and removed it.`;
+                            } else {
+                                failureMessage = `❌ Could not find phrase or word "${targetWord}" in clip ${id}.`;
+                            }
                         }
                     } else {
                         failureMessage = clip ? `❌ No detailed word data available for Clip ${id}.` : `❌ Clip ${id} not found.`;
