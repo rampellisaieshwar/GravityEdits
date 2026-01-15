@@ -23,10 +23,11 @@ My goal was to solve this not with simple filters, but with a multi-modal AI age
 
 **[ACTION: Switch screen recording to a diagram or the VS Code editor showing `ai_engine.py`]**
 
-"Under the hood, Gravity Edits uses a hybrid AI pipeline:
-1.  **Faster-Whisper** handles Speech-to-Text for precise timestamping.
-2.  **OpenCV & DeepFace** analyze visual metrics like brightness and emotion.
-3.  And **Gemini 2.5 Pro** acts as the high-level reasoning engine, making the final editorial decisions based on the data."
+"Under the hood, Gravity Edits uses a hybrid AI pipeline built on a fast, asynchronous stack:
+1.  **FastAPI & Uvicorn** handle the backend orchestration purely asynchronously.
+2.  **Faster-Whisper** handles quantized Speech-to-Text for precise timestamping.
+3.  **OpenCV & DeepFace** analyze visual metrics like **Laplacian Variance** for blur and HSV histograms for exposure.
+4.  And **Gemini 2.5 Pro** acts as the reasoning engine, processing our dense JSON state via the 'Wakullah Protocol'."
 
 ---
 
@@ -38,9 +39,9 @@ My goal was to solve this not with simple filters, but with a multi-modal AI age
 
 **[ACTION: While the progress bar moves / 'Analyzing' spinner is shown]**
 
-What's happening right now is complex. The backend is splitting the video. It's transcribing the audio to find words. But simultaneously, the computer vision module is scanning every frame to check if it's too dark or if the subject is happy or neutral.
+What's happening right now is heavy processing offloaded to a **Redis Task Queue**. The backend splits the video and effectively 'maps' it. It's transcribing audio, but simultaneously, the CV module is vectorizing frame data to detect sentiment and lighting quality.
 
-It then packages all this data into a JSON prompt and sends it to the LLM with the 'Wakullah Protocol'—my custom prompt engineering technique that teaches the AI how to edit."
+It packages this into a context-optimized payload and sends it to Gemini. This isn't just a simple prompt; it's a structured request enforcing a strict **XML Schema** for the output."
 
 ---
 
@@ -48,25 +49,25 @@ It then packages all this data into a JSON prompt and sends it to the LLM with t
 
 **[ACTION: When the Project loads and the Timeline appears]**
 
-"And here is the result. This is the **Gravity Edits Workbench**.
+"And here is the result. This is the **Gravity Edits Workbench**, a React 19 SPA.
 
-Unlike a 'black box' generator, this interface lets me see exactly what the AI did.
+Unlike a 'black box' generator, this interface visualizes the AI's decision tree.
 
 **[ACTION: Mouse over a RED (rejected) clip on the timeline]**
 
-Notice these red blocks? The AI automatically identified these as 'Bad Takes' or 'Silence'. If I hover over this one... see the reason? It says **'Redundant / Non-verbal'**. The AI decided to cut this to keep the video fast-paced.
+Notice these red blocks? The AI identified these as 'Bad Takes'. My 'Ghostbuster' algorithm cross-referenced the transcript with silence thresholds to ensure these cuts are frame-perfect.
 
 **[ACTION: Mouse over a GREEN (kept) clip]**
 
-Now look at the kept clips. The AI didn't just keep them; it *enhanced* them.
+Now look at the kept clips. The AI didn't just keep them; it *enhanced* them using specific technical directives.
 
 **[ACTION: Click on a clip that has a 'Text Overlay' (viral caption) above it]**
 
-See this text layer? The LLM identified this moment as a 'Punchline' or 'High Value Moment' and automatically generated a viral-style caption for it. I didn't type this—the AI did.
+See this text layer? The LLM tagged this timestamp as a 'Punchline'. The frontend renders this using **Framer Motion**, but the backend will bake it in later using ImageMagick.
 
 **[ACTION: Click on the 'Color Board' or show metadata side panel]**
 
-It also applied Color Grading. It detected that the original footage was slightly 'Flat', so it applied a **Saturation Boost** and **Contrast Correction** automatically."
+It also applied Color Grading. It detected the footage was 'Flat' and applied a **NumPy-based Gamma Correction** matrix to boost dynamic range."
 
 ---
 
@@ -74,17 +75,17 @@ It also applied Color Grading. It detected that the original footage was slightl
 
 **[ACTION: Open the "AI Chat" sidebar or Window in the editor]**
 
-"But here's the best part: The AI is a collaborator, not a dictator. We know AI isn't right 100% of the time, so I built a **Human-in-the-Loop** workflow.
+"But here's the best part: The AI is a collaborator. We know probabilistic models can hallucinate, so I built a **Human-in-the-Loop** workflow enforced by strict Pydantic models.
 
 I can talk to the agent directly. Watch this.
 
 **[ACTION: Type into the chat box: "It feels too slow. Make it punchier and remove the long pause at 0:40"]**
 
-The Agent processes this natural language request and updates the edit decision list in real-time.
+The Agent processes this natural language request and mutates the internal Redux-like state graph in real-time.
 
 **[ACTION: Manually drag the edge of a clip to extend it, or use the 'Razor' tool to split a clip]**
 
-And if I want fine-grained control, I can manually intervene. I can use the Razor tool to split this clip here, or drag the timeline to bring back a section the AI removed. The system respects my manual overrides as the final truth, ensuring the perfect blend of automation and human creativity."
+And if I want fine-grained control, I can manually intervene. The system uses a 'Last-Write-Wins' strategy where my manual edits override the AI's suggestions, ensuring the output is always deterministic."
 
 ---
 
@@ -92,7 +93,7 @@ And if I want fine-grained control, I can manually intervene. I can use the Razo
 
 **[ACTION: Mention or Show Shorts toggle if available, otherwise skip to Export]**
 
-"One of the coolest features is the **Shorts Adapter**. The system can programmatically crop this 16:9 landscape video into a 9:16 vertical video by centering the subject, making it ready for TikTok or Reels instantly."
+"One of the coolest features is the **Shorts Adapter**. The system programmatically calculates the 'Center of Action' and crops this 16:9 1080p video into a 9:16 vertical format, handling the aspect ratio conversion automatically."
 
 ---
 
@@ -104,7 +105,7 @@ And if I want fine-grained control, I can manually intervene. I can use the Razo
 
 **[ACTION: Wait for the download or switch to a pre-rendered 'Final Output' video file]**
 
-Instead of me spending 2 hours cutting this, the custom Python rendering engine stitches it all together in minutes. It even gives me the **.srt subtitle file** automatically so I can upload it straight to YouTube.
+Instead of me spending 2 hours cutting this, the custom Python rendering engine uses **MoviePy** and **multiprocessing** to stitch it all together. It creates a composite video clip, rendering layers, audio mixing, and subtitles in parallel.
 
 **[ACTION: Play 5-10 seconds of the FINAL Video full screen with sound]**
 
@@ -116,6 +117,6 @@ As you can see, the jump cuts are smooth, the captions are timed perfectly, and 
 
 **[ACTION: Back to Camera or Title Slide]**
 
-"Gravity Edits proves that we can move beyond simple tools to true **Agentic Workflows**. By combining deterministic Computer Vision with the semantic reasoning of Large Language Models, we've created an editor that doesn't just process pixels—it understands content.
+"Gravity Edits proves that we can move beyond simple tools to true **Agentic Workflows**. By combining deterministic Computer Vision metrics with the semantic reasoning of Large Language Models, we've created a system that is both technically robust and creatively powerful.
 
 Thank you."
