@@ -260,6 +260,12 @@ def generate_xml_edl(project_data, output_path, project_name="Project", user_des
         - Add them to the <viral_shorts> section.
         - Ensure 'clip_ids' corresponds to the 'id' attributes of the clips you kept in the EDL.
         
+        STEP 6: DURATION CHECK (CRITICAL)
+        - Check the user's instructions for time limits (e.g., "60 seconds", "1 minute").
+        - If a limit exists, YOU MUST calculate the total duration of clips where keep="true".
+        - If the total exceeds the limit, set keep="false" for the lowest priority clips until you are under the limit.
+        - FAILURE TO RESPECT TIME LIMITS IS A CRITICAL ERROR.
+
         ---------------------------------------------------------
         OUTPUT FORMAT (Strict XML):
         ---------------------------------------------------------
