@@ -9,3 +9,6 @@ opencv-python-headless
 pydantic
 requests
 google-generativeai
+langchain
+langchain-google-genai
+langchain-community

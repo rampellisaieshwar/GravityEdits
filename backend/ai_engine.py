@@ -1,12 +1,12 @@
 import os
-import cv2
-import numpy as np
 import json
 import requests
 # Imports moved to functions to prevent startup locks
 # from moviepy import VideoFileClip
 # from faster_whisper import WhisperModel
 # from deepface import DeepFace
+# import cv2
+# import numpy as np
 
 # Settings
 TEMP_AUDIO_DIR = "processing"
@@ -212,96 +212,185 @@ def generate_xml_edl(project_data, output_path, project_name="Project", user_des
         
         # Use user_description if provided, otherwise a default
         user_desc = user_description if user_description else 'Make it viral and fast-paced.'
+        target_audience = "General Social Media Audience"
 
         prompt = f"""
-        ROLE: Expert Video Editor, Linguist, and Colorist.
-        
-        INPUT DATA (Sanitized but may still contain errors):
-        {json_input}
-        
-        USER CONTEXT: "{user_desc}"
-        
-        ---------------------------------------------------------
-        YOUR 5-STEP MISSION (THE "WAKULLAH" PROTOCOL):
-        ---------------------------------------------------------
-        
-        STEP 1: TEXT SANITIZATION (The Ghostbuster Filter)
-        - The transcript may still contain phantom words (e.g., "Banana", "Penguin", "Steam").
-        - RULE: If a word is a random noun that doesn't fit the sentence context, DELETE IT.
-        - RULE: Fix phonetic errors (e.g., "Pre-ill" -> "Premiere", "Strain moral" -> "Train models").
-        - OUTPUT: Use this CLEANED text in the final XML.
-        
-        STEP 2: SURGICAL EDITING (Bad Takes & Quality Control)
-        - Look for semantic duplicates (e.g., "The first step... [pause]... The first step is...").
-        - ACTION: Keep ONLY the best/last version. Mark the others as keep="false".
-        - RULE: Cut "dead air" by adjusting 'start' and 'end' times to match the clean speech.
-        - CRITICAL RULE (QUALITY CONTROL):
-          - If a clip contains broken grammar, stuttering that breaks flow, or nonsense words, SET keep="false" reason="Bad Grammar/Flow".
-          - If a clip is just laughing, breathing, coughing, or silence with no meaningful speech, SET keep="false" reason="Non-verbal/Noise".
-          - If the transcript is unintelligible or hallucinated (random words), SET keep="false" reason="Bad Audio/Transcript".
-        
-        STEP 3: VISUAL REPAIR (The "Fix It" Logic)
-        - Check 'visual_data' for each clip.
-        - IF brightness is "dark" or "low":
-          - DO NOT DELETE. Instead, ADD: <correction type="brightness" value="1.4" />
-        - IF emotion is "dull":
-          - ADD: <correction type="saturation" value="1.2" />
-          
-        STEP 4: VIRAL ENHANCEMENTS (Overlays)
-        - YOU MUST Identify at least 3 "High Value" moments (Topic shifts, Punchlines, or Key Words).
-        - Even in a boring video, find the most important words to highlight.
-        - GENERATE <overlays> for them.
-        - Style: "pop", "slide_up" | "typewriter".
-        - Colors: Yellow (#FFFF00) for emphasis, White (#FFFFFF) for standard.
-        
-        STEP 5: VIRAL SHORTS (The Hook)
-        - YOU MUST Identify at least 2 separate sequences (15s-60s) that act as standalone viral shorts.
-        - Even if the footage is boring, find the best contiguous segments (e.g., a funny mistake or the most energetic part).
-        - Add them to the <viral_shorts> section.
-        - Ensure 'clip_ids' corresponds to the 'id' attributes of the clips you kept in the EDL.
-        
-        STEP 6: DURATION CHECK (CRITICAL)
-        - Check the user's instructions for time limits (e.g., "60 seconds", "1 minute").
-        - If a limit exists, YOU MUST calculate the total duration of clips where keep="true".
-        - If the total exceeds the limit, set keep="false" for the lowest priority clips until you are under the limit.
-        - FAILURE TO RESPECT TIME LIMITS IS A CRITICAL ERROR.
+ROLE: Expert Video Editor (AI), Viral Content Strategist, and Motion Graphics Supervisor.
 
-        ---------------------------------------------------------
-        OUTPUT FORMAT (Strict XML):
-        ---------------------------------------------------------
-        <project name="{project_name}">
-            <global_settings>
-                <frame_rate>30</frame_rate>
-            </global_settings>
-            
-            <edl>
-                <clip id="1" source="video.mp4" start="0.5" end="4.2" keep="true" reason="Clean intro" text="Welcome to the AI editor">
-                    <correction type="brightness" value="1.3" /> 
-                </clip>
-                
-                <clip id="2" source="video.mp4" start="4.2" end="8.0" keep="false" reason="Redundant / Bad Audio" />
-            </edl>
-            
-            <viral_shorts>
-                <short>
-                    <title>The Secret Trick</title>
-                    <clip_ids>5,6,7</clip_ids>
-                </short>
-            </viral_shorts>
-            
-            <overlays>
-                <text id="t1" content="GAME CHANGER" start="0.5" duration="2.0" style="pop" color="#FFFF00" size="5" x="50" y="50" font="Arial-Bold"/>
-            </overlays>
-        </project>
-        """
+INPUT DATA: {json_input}
+USER CONTEXT: "{user_desc}"
+TARGET AUDIENCE: "{target_audience}"
+
+---------------------------------------------------------
+YOUR 6-STEP MISSION (THE "SUPER-WAKULLAH V2" PROTOCOL):
+---------------------------------------------------------
+
+STEP 1: CONTEXTUAL SANITIZATION
+- Analyze the PRIMARY TOPIC first.
+- Remove "Ghost Words" and fix phonetic errors only if confidence > 90%.
+- If a word is deleted, flag the timestamp for a potential "Jump Cut".
+
+STEP 2: SURGICAL EDITING & PACING
+- Remove semantic duplicates (keep the best take).
+- Calculate silence duration. If > 0.8s, mark as "jump_cut_needed".
+- Set keep="false" for incomplete sentences or severe stuttering.
+
+STEP 3: VISUAL & AUDIO REPAIR
+- Brightness: If "dark", add <correction type="brightness" value="1.3" />.
+- Audio: If "quiet", add <correction type="gain" value="+5db" />.
+- Saturation: If "dull", add <correction type="saturation" value="1.2" />.
+
+STEP 4: MANDATORY OVERLAY GENERATION (ZERO TOLERANCE)
+- **CRITICAL RULE:** You CANNOT output an empty overlay list.
+- **The Hook:** You MUST generate a "pop" style overlay for the very first 3 seconds of the video.
+- **Keywords:** Identify at least 3 "Power Nouns" (e.g., "Money", "Secret", "AI") and generate a "highlight" overlay for them.
+- **Pacing:** Ensure there is at least one visual overlay element every 10 seconds to maintain retention.
+
+STEP 5: COMPULSORY VIRAL SHORTS (THE "NO EXCUSES" RULE)
+- **CRITICAL RULE:** You MUST extract exactly 3 distinct sequences (15s - 60s) suitable for TikTok/Reels.
+- **Logic:** Even if the video is slow, you must find the "Best Available" contiguous segments based on:
+  1. Loudest audio (High energy).
+  2. Fastest speech rate (Pacing).
+  3. Topic changes (New information).
+- Add these to the <viral_shorts> section with a "Viral Score" (1-100).
+
+STEP 6: PRIORITY SCORING
+- Assign a PRIORITY SCORE (1-5) to every clip in the EDL.
+- 5 = Essential/Hook (Must Keep).
+- 1 = Tangent/Filler (First to Cut).
+ - **MANDATORY:** You MUST include the `source` attribute in every <clip> tag, copying the `source_video` value from the input JSON exactly.
+
+---------------------------------------------------------
+OUTPUT FORMAT (Strict XML):
+---------------------------------------------------------
+<project name="{project_name}">
+    <global_settings>
+        <aspect_ratio>9:16</aspect_ratio>
+    </global_settings>
+
+    <edl>
+        <clip id="1" start="0.0" end="4.0" keep="true" priority="5" text="This is the only way to fix it.">
+             <correction type="brightness" value="1.2" />
+        </clip>
+    </edl>
+
+    <viral_shorts>
+        <short id="s1" duration="45s" viral_score="92">
+            <title>The Main Hook</title>
+            <reason>High energy intro + controversial statement</reason>
+            <clip_ids>1,2,3</clip_ids>
+        </short>
+        <short id="s2" duration="30s" viral_score="85">
+            <title>The Quick Tip</title>
+            <reason>Fast pacing and clear instruction</reason>
+            <clip_ids>8,9</clip_ids>
+        </short>
+        <short id="s3" duration="15s" viral_score="78">
+            <title>The Outtake/Funny Moment</title>
+            <reason>Unexpected laughter breaks the pattern</reason>
+            <clip_ids>15</clip_ids>
+        </short>
+    </viral_shorts>
+
+    <overlays>
+        <text content="STOP SCROLLING" start="0.0" duration="1.5" style="impact_pop" color="#FF0000" size="large" />
         
-        if not api_key:
+        <text content="10X RETURNS" start="2.4" duration="1.0" style="highlight_yellow" position="center" />
+        <text content="SECRET" start="15.2" duration="0.8" style="shake" color="#FFFF00" />
+    </overlays>
+
+</project>
+"""
+        # prompt = f"""
+        # ROLE: Expert Video Editor, Linguist, and Colorist.
+        
+        # INPUT DATA (Sanitized but may still contain errors):
+        # {json_input}
+        
+        # USER CONTEXT: "{user_desc}"
+        
+        # ---------------------------------------------------------
+        # YOUR 5-STEP MISSION (THE "WAKULLAH" PROTOCOL):
+        # ---------------------------------------------------------
+        
+        # STEP 1: TEXT SANITIZATION (The Ghostbuster Filter)
+        # - The transcript may still contain phantom words (e.g., "Banana", "Penguin", "Steam").
+        # - RULE: If a word is a random noun that doesn't fit the sentence context, DELETE IT.
+        # - RULE: Fix phonetic errors (e.g., "Pre-ill" -> "Premiere", "Strain moral" -> "Train models").
+        # - OUTPUT: Use this CLEANED text in the final XML.
+        
+        # STEP 2: SURGICAL EDITING (Bad Takes & Quality Control)
+        # - Look for semantic duplicates (e.g., "The first step... [pause]... The first step is...").
+        # - ACTION: Keep ONLY the best/last version. Mark the others as keep="false".
+        # - RULE: Cut "dead air" by adjusting 'start' and 'end' times to match the clean speech.
+        # - CRITICAL RULE (QUALITY CONTROL):
+        #   - If a clip contains broken grammar, stuttering that breaks flow, or nonsense words, SET keep="false" reason="Bad Grammar/Flow".
+        #   - If a clip is just laughing, breathing, coughing, or silence with no meaningful speech, SET keep="false" reason="Non-verbal/Noise".
+        #   - If the transcript is unintelligible or hallucinated (random words), SET keep="false" reason="Bad Audio/Transcript".
+        
+        # STEP 3: VISUAL REPAIR (The "Fix It" Logic)
+        # - Check 'visual_data' for each clip.
+        # - IF brightness is "dark" or "low":
+        #   - DO NOT DELETE. Instead, ADD: <correction type="brightness" value="1.4" />
+        # - IF emotion is "dull":
+        #   - ADD: <correction type="saturation" value="1.2" />
+          
+        # STEP 4: VIRAL ENHANCEMENTS (Overlays)
+        # - YOU MUST Identify at least 3 "High Value" moments (Topic shifts, Punchlines, or Key Words).
+        # - Even in a boring video, find the most important words to highlight.
+        # - GENERATE <overlays> for them.
+        # - Style: "pop", "slide_up" | "typewriter".
+        # - Colors: Yellow (#FFFF00) for emphasis, White (#FFFFFF) for standard.
+        
+        # STEP 5: VIRAL SHORTS (The Hook)
+        # - YOU MUST Identify at least 2 separate sequences (15s-60s) that act as standalone viral shorts.
+        # - Even if the footage is boring, find the best contiguous segments (e.g., a funny mistake or the most energetic part).
+        # - Add them to the <viral_shorts> section.
+        # - Ensure 'clip_ids' corresponds to the 'id' attributes of the clips you kept in the EDL.
+        
+        # STEP 6: DURATION CHECK (CRITICAL)
+        # - Check the user's instructions for time limits (e.g., "60 seconds", "1 minute").
+        # - If a limit exists, YOU MUST calculate the total duration of clips where keep="true".
+        # - If the total exceeds the limit, set keep="false" for the lowest priority clips until you are under the limit.
+        # - FAILURE TO RESPECT TIME LIMITS IS A CRITICAL ERROR.
+
+        # ---------------------------------------------------------
+        # OUTPUT FORMAT (Strict XML):
+        # ---------------------------------------------------------
+        # <project name="{project_name}">
+        #     <global_settings>
+        #         <frame_rate>30</frame_rate>
+        #     </global_settings>
+            
+        #     <edl>
+        #         <clip id="1" source="video.mp4" start="0.5" end="4.2" keep="true" reason="Clean intro" text="Welcome to the AI editor">
+        #             <correction type="brightness" value="1.3" /> 
+        #         </clip>
+                
+        #         <clip id="2" source="video.mp4" start="4.2" end="8.0" keep="false" reason="Redundant / Bad Audio" />
+        #     </edl>
+            
+        #     <viral_shorts>
+        #         <short>
+        #             <title>The Secret Trick</title>
+        #             <clip_ids>5,6,7</clip_ids>
+        #         </short>
+        #     </viral_shorts>
+            
+        #     <overlays>
+        #         <text id="t1" content="GAME CHANGER" start="0.5" duration="2.0" style="pop" color="#FFFF00" size="5" x="50" y="50" font="Arial-Bold"/>
+        #     </overlays>
+        # </project>
+        # """
+        
+        if not key:
              print("Missing API Key for Gemini")
              return False
 
         # RAW REST API CALL (Bypass SDK issues)
         def call_gemini_api(prompt, key):
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={key}"
+            # UPDATED: Switched to the model listed in your dashboard (gemini-2.0-flash)
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={key}"
             headers = {"Content-Type": "application/json"}
             data = {
                 "contents": [{"parts": [{"text": prompt}]}]
@@ -323,12 +412,12 @@ def generate_xml_edl(project_data, output_path, project_name="Project", user_des
                 return None
 
         print("Sending request via REST API...")
-        response_text = call_gemini_api(prompt, api_key)
+        response_text = call_gemini_api(prompt, key)
         
         if not response_text:
              print("AI returned empty or error.")
              # Fallback?
-             return False
+             raise Exception("AI API returned empty or failed to generate response.")
 
         xml_out = response_text.replace("```xml", "").replace("```", "").strip()
         

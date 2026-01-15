@@ -42,8 +42,8 @@ class ChatEngine:
         # 1. Build System Prompt
         system_prompt_content = self._build_system_prompt(context)
         
-        # 2. Use LangChain if applicable
-        if LANGCHAIN_AVAILABLE and project_path and llm_config.LLM_PROVIDER == "gemini":
+        # 2. Use Gemini (REST) or LangChain
+        if (llm_config.LLM_PROVIDER == "gemini") or (LANGCHAIN_AVAILABLE and project_path):
             return self._generate_with_langchain(query, system_prompt_content, project_path, api_key)
             
         # 3. Fallback to Legacy (Ollama or Manual History)
@@ -66,7 +66,9 @@ class ChatEngine:
             # or we could use the 'chat' endpoint but 'generateContent' is simpler.
             full_prompt = f"SYSTEM: {sys_prompt}\n\nUSER: {user_query}"
             
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={key}"
+            # Use configured model or fallback to gemini-pro
+            model = getattr(llm_config, 'LLM_MODEL', 'gemini-pro')
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
             headers = {"Content-Type": "application/json"}
             data = {
                 "contents": [{"parts": [{"text": full_prompt}]}]
