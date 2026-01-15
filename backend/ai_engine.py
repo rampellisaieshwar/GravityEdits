@@ -248,7 +248,8 @@ def generate_xml_edl(project_data, output_path, project_name="Project", user_des
           - ADD: <correction type="saturation" value="1.2" />
           
         STEP 4: VIRAL ENHANCEMENTS (Overlays)
-        - Identify 3-5 "High Value" moments (Topic shifts, Punchlines).
+        - YOU MUST Identify at least 3 "High Value" moments (Topic shifts, Punchlines, or Key Words).
+        - Even in a boring video, find the most important words to highlight.
         - GENERATE <overlays> for them.
         - Style: "pop", "slide_up" | "typewriter".
         - Colors: Yellow (#FFFF00) for emphasis, White (#FFFFFF) for standard.

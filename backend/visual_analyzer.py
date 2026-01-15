@@ -45,7 +45,9 @@ def analyze_video(video_path):
             
         results[str(mid_point)] = {
             "brightness": brightness_val,
-            "emotion": emotion # Mocked for stability
+            "blur_score": cv2.Laplacian(gray, cv2.CV_64F).var(), # Laplacian Variance
+            "saturation_avg": np.mean(cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)[:, :, 1]), # HSV Saturation
+            "emotion": emotion 
         }
         
     cap.release()
