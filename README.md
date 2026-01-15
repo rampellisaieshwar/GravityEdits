@@ -18,7 +18,8 @@ Gravity Edits is a modern, AI-powered video editing platform designed to streaml
     *   **Draggable Background Music**: Customize the start time and duration of your soundtrack visually.
     *   **Advanced Audio Tools**: Split, trim, and re-arrange secondary audio clips effortlessly.
 *   **📱 Viral Shorts Mode**: Instantly generates 9:16 vertical videos optimized for TikTok/Reels/Shorts, complete with smart cropping.
-*   **🔑 BYOK Architecture**: **Bring Your Own Key** system. Your API keys (Gemini) are stored locally in your browser for maximum security and privacy. No backend storage of sensitive keys.
+*   **� Auto-Captioning**: Automatically generates standard `.srt` subtitle files for accessibility and SEO, synced perfectly with the final cut.
+*   **�🔑 BYOK Architecture**: **Bring Your Own Key** system. Your API keys (Gemini) are stored locally in your browser for maximum security and privacy. No backend storage of sensitive keys.
 *   **🎨 Color & Effects**: Basic color grading (Temperature, Exposure, Contrast) and text overlays.
 *   **🚀 Efficient**: Local rendering pipeline built on **MoviePy** and **OpenCV**.
 
