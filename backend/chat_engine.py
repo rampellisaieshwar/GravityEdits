@@ -56,6 +56,38 @@ class ChatEngine:
         return self._call_legacy_llm(messages)
 
     def _generate_with_langchain(self, query, system_prompt_content, project_path, api_key=None):
+        # RAW REST API FALLBACK (Bypass SDK issues)
+        key_to_use = api_key if api_key else llm_config.GEMINI_API_KEY
+        if not key_to_use:
+             return "Error: No API Key provided."
+
+        def call_gemini_rest(sys_prompt, user_query, key):
+            # We combine system prompt + user query for the raw API since it's stateless here
+            # or we could use the 'chat' endpoint but 'generateContent' is simpler.
+            full_prompt = f"SYSTEM: {sys_prompt}\n\nUSER: {user_query}"
+            
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={key}"
+            headers = {"Content-Type": "application/json"}
+            data = {
+                "contents": [{"parts": [{"text": full_prompt}]}]
+            }
+            try:
+                resp = requests.post(url, headers=headers, json=data)
+                if resp.status_code != 200:
+                    return f"Gemini API Error {resp.status_code}: {resp.text}"
+                
+                result = resp.json()
+                try:
+                    return result["candidates"][0]["content"]["parts"][0]["text"]
+                except:
+                    return "AI returned unreadable response."
+            except Exception as e:
+                return f"REST Request failed: {e}"
+
+        return call_gemini_rest(system_prompt_content, query, key_to_use)
+        
+        # OLD LANGCHAIN CODE (Commented out until environment fixed)
+        """
         try:
             # Determine Key
             key_to_use = api_key if api_key else llm_config.GEMINI_API_KEY
@@ -110,6 +142,7 @@ class ChatEngine:
         except Exception as e:
             print(f"LangChain Execution Error: {e}")
             return f"Error using LangChain: {str(e)}"
+        """
 
     def _build_system_prompt(self, context, current_state=None):
         base_prompt = (
