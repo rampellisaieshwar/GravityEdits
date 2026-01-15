@@ -296,7 +296,7 @@ def generate_xml_edl(project_data, output_path, project_name="Project", user_des
         """
         
         # Call Gemini (Standard SDK)
-        model = genai.GenerativeModel("gemini-1.5-pro")
+        model = genai.GenerativeModel("gemini-1.5-flash")
         response = model.generate_content(prompt)
         
         # Clean Output
