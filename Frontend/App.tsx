@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Film, Settings, Palette } from 'lucide-react';
+import { Film, Settings, Palette, MessageSquare, RotateCcw, RotateCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MOCK_XML_EDL, API_BASE_URL } from './constants';
 import { parseEDLXml } from './utils/xmlParser';
-import { VideoProject, Clip, AudioClip, TextOverlay } from './types';
+import { VideoProject, Clip, AudioClip, TextOverlay, ChatMessage } from './types';
 
 // Components
 import Sidebar from './components/Sidebar';
@@ -15,6 +15,7 @@ import UploadModal from './components/UploadModal';
 import ExportOverlay from './components/ExportOverlay';
 import LandingPage from './components/LandingPage';
 import SettingsModal from './components/SettingsModal';
+import AIChatPanel from './components/AIChatPanel';
 
 const SpaceBackground = () => (
   <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
@@ -58,6 +59,7 @@ const App: React.FC = () => {
   const [sidebarTab, setSidebarTab] = useState<'media' | 'viral' | 'audio'>('media');
   const [view, setView] = useState<'edit' | 'color'>('edit');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const [userInitials, setUserInitials] = useState("JS");
 
   const updateProfile = () => {
@@ -123,16 +125,63 @@ const App: React.FC = () => {
   // Listen for Settings Open Event (from Landing Page)
   useEffect(() => {
     const handleOpenSettings = () => setIsSettingsOpen(true);
+
+    const handleReload = async (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail && detail.name) {
+        // Re-fetch logic similar to session restore
+        try {
+          const edlRes = await fetch(`${API_BASE_URL}/api/projects/${detail.name}/edl`);
+          const analysisRes = await fetch(`${API_BASE_URL}/api/projects/${detail.name}/analysis`);
+
+          if (edlRes.ok) {
+            const xml = await edlRes.text();
+            const meta = analysisRes.ok ? await analysisRes.json() : null;
+            const proj = parseEDLXml(xml, meta);
+            if (proj) {
+              proj.name = detail.name;
+              setProject(proj);
+              console.log("Project reloaded via event!");
+            }
+          }
+        } catch (err) {
+          console.error("Reload failed", err);
+        }
+      }
+    };
+
     window.addEventListener('openAPISettings', handleOpenSettings);
-    return () => window.removeEventListener('openAPISettings', handleOpenSettings);
+    window.addEventListener('projectReloadNeeded', handleReload);
+    return () => {
+      window.removeEventListener('openAPISettings', handleOpenSettings);
+      window.removeEventListener('projectReloadNeeded', handleReload);
+    };
   }, []);
 
   // -- LANDING PAGE HANDLERS --
   const handleProjectLoaded = (loadedProject: VideoProject, name?: string, shouldSwitchMode = true) => {
     setProject(loadedProject);
-    if (name) setCurrentProjectName(name);
-    // If loaded from XML, name is inside project usually, but we might want explicit folder name
-    else setCurrentProjectName(loadedProject.name);
+    const pName = name || loadedProject.name;
+    setCurrentProjectName(pName);
+
+    // Reset and Fetch History
+    setChatHistory([]); // Clear old history
+    // Fetch persisted history if available
+    fetch(`${API_BASE_URL}/api/projects/${pName}/chat-history`)
+      .then(res => res.ok ? res.json() : [])
+      .then(history => {
+        // Adapt format if needed specific to frontend ChatMessage type
+        // Backend stores langchain format or legacy. We might need to map.
+        // For now assume simple format or just clear it effectively separates sessions.
+        if (Array.isArray(history)) {
+          const mapped = history.map((h: any) => ({
+            role: (h.type === 'human' ? 'user' : 'assistant'),
+            content: h.data.content
+          }));
+          setChatHistory(mapped);
+        }
+      })
+      .catch(() => { }); // silent fail, blank history is fine
 
     if (shouldSwitchMode) setAppMode('editor');
   };
@@ -268,6 +317,14 @@ const App: React.FC = () => {
     setProject({ ...project, edl: newClips });
   };
 
+  const handleDeleteClip = (clipId: string) => {
+    if (!project) return;
+    const newEdl = project.edl.filter(c => c.id !== clipId);
+    setProject({ ...project, edl: newEdl });
+    // Clear selection if deleted clip was selected
+    if (selectedClipId === clipId) setSelectedClipId(null);
+  };
+
   const handleSplitClip = (clipId: string, splitOffset: number) => {
     if (!project) return;
 
@@ -314,19 +371,55 @@ const App: React.FC = () => {
 
   const [originalProject, setOriginalProject] = useState<VideoProject | null>(null);
   const [initialExportTarget, setInitialExportTarget] = useState<number>(-1);
+  const [history, setHistory] = useState<VideoProject[]>([]);
+  const [future, setFuture] = useState<VideoProject[]>([]);
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
 
   const handleUpdateProject = (updatedProject: VideoProject) => {
     // Auto-expand timeline if bgMusic is added
     if (updatedProject.bgMusic && !project?.bgMusic) {
       setTimelineHeight(prev => Math.min(600, prev + 48));
     }
-    setProject(updatedProject);
 
+    // Save to history (Limit to 20 steps)
+    if (project) {
+      setHistory(prev => [...prev.slice(-19), project]);
+      setFuture([]); // Clear redo stack on new action
+    }
     // Also update title if changed
     if (updatedProject.name !== project?.name) {
       setCurrentProjectName(updatedProject.name);
     }
+
+    setProject(updatedProject);
   };
+
+  const handleUndo = useCallback(() => {
+    if (history.length === 0) return;
+
+    const previous = history[history.length - 1];
+    const newHistory = history.slice(0, -1);
+
+    if (project) {
+      setFuture(prev => [project, ...prev]);
+    }
+
+    setHistory(newHistory);
+    setProject(previous);
+  }, [history, project]);
+
+  const handleRedo = useCallback(() => {
+    if (future.length === 0) return;
+
+    const next = future[0];
+    const newFuture = future.slice(1);
+
+    if (project) {
+      setHistory(prev => [...prev, project]);
+    }
+    setFuture(newFuture);
+    setProject(next);
+  }, [future, project]);
 
   const handleExportShort = (shortIndex: number) => {
     setInitialExportTarget(shortIndex);
@@ -548,14 +641,14 @@ const App: React.FC = () => {
     setProject(prev => {
       if (!prev) return null;
       // Check if track 99 exists, if not add it
-      const currentTracks = new Set(prev.audioTracks || [2]);
+      const currentTracks = new Set<number>(prev.audioTracks || [2]);
       currentTracks.add(99);
 
       return {
         ...prev,
         bgMusic: undefined, // Remove legacy field
         audioClips: [...(prev.audioClips || []), part1, part2],
-        audioTracks: Array.from(currentTracks).sort((a, b) => a - b)
+        audioTracks: Array.from(currentTracks).sort((a: number, b: number) => a - b)
       };
     });
   };
@@ -620,9 +713,28 @@ const App: React.FC = () => {
       start: start,
       duration: 3.0,
       style: 'pop',
-      origin: 'manual'
+      origin: 'manual',
+      // NORMALIZED COORDINATES (0.0 to 1.0)
+      fontSize: 0.08,       // 8% of video HEIGHT (Social media standard)
+      positionX: 0.5,       // Center horizontally (0.5 = 50%)
+      positionY: 0.8,       // Lower third (0.8 = 80%)
+      textColor: '#ffffff'
     };
     setProject({ ...project, overlays: [...(project.overlays || []), newOverlay] });
+  };
+
+  const handleDeleteOverlay = (overlayId: string) => {
+    if (!project) return;
+    const newOverlays = (project.overlays || []).filter(o => o.id !== overlayId);
+    setProject({ ...project, overlays: newOverlays });
+    // Clear selection if deleted overlay was selected
+    if (selectedOverlayId === overlayId) setSelectedOverlayId(null);
+  };
+
+  const handleDeleteAudioClip = (clipId: string) => {
+    if (!project) return;
+    const newAudioClips = (project.audioClips || []).filter(c => c.id !== clipId);
+    setProject({ ...project, audioClips: newAudioClips });
   };
 
   if (appMode === 'landing') {
@@ -659,6 +771,27 @@ const App: React.FC = () => {
             <button onClick={() => setView('edit')} className={`px-3 py-1 rounded transition-all ${view === 'edit' ? 'text-white bg-[#333]' : 'text-gray-500 hover:text-gray-200'}`}>Edit</button>
             <button onClick={() => setView('color')} className={`px-3 py-1 rounded flex items-center gap-1.5 transition-all ${view === 'color' ? 'text-blue-400 bg-[#333]' : 'text-gray-500 hover:text-gray-200'}`}><Palette size={12} />Color</button>
           </nav>
+          <div className="h-4 w-[1px] bg-[#2A2A2A]" />
+
+          {/* Undo / Redo Controls */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handleUndo}
+              disabled={history.length === 0}
+              className={`p-1.5 rounded transition-all ${history.length > 0 ? 'text-white hover:bg-[#333]' : 'text-gray-600 opacity-50 cursor-not-allowed'}`}
+              title="Undo (Ctrl+Z)"
+            >
+              <RotateCcw size={14} />
+            </button>
+            <button
+              onClick={handleRedo}
+              disabled={future.length === 0}
+              className={`p-1.5 rounded transition-all ${future.length > 0 ? 'text-white hover:bg-[#333]' : 'text-gray-600 opacity-50 cursor-not-allowed'}`}
+              title="Redo (Ctrl+Y)"
+            >
+              <RotateCw size={14} />
+            </button>
+          </div>
         </div>
 
         {/* Center: Back Button when in Short Mode */}
@@ -690,7 +823,14 @@ const App: React.FC = () => {
             onClick={() => setIsSettingsOpen(true)}
             className="flex items-center gap-2 bg-[#2A2A2A] hover:bg-[#333] px-3 py-1 rounded text-[10px] font-bold uppercase transition-colors"
           >
-            <Settings size={12} /> Project Configuration
+            <Settings size={12} /> Project Config
+          </button>
+
+          <button
+            onClick={() => setIsChatOpen(!isChatOpen)}
+            className={`flex items-center gap-2 px-3 py-1 rounded text-[10px] font-bold uppercase transition-colors ${isChatOpen ? 'bg-blue-600 text-white' : 'bg-[#2A2A2A] hover:bg-[#333] text-gray-300'}`}
+          >
+            <MessageSquare size={12} /> Chat Interface
           </button>
           <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-[10px] font-black border border-blue-400/50 shadow-inner">{userInitials}</div>
         </div>
@@ -713,6 +853,7 @@ const App: React.FC = () => {
               onLoadShort={handleLoadShort}
               onExportShort={handleExportShort}
               onAddAudioClip={handleAddAudioClip}
+              onOpenSettings={() => setIsSettingsOpen(true)}
             />
           </div>
 
@@ -742,10 +883,20 @@ const App: React.FC = () => {
           {/* Divider */}
           <div onMouseDown={startResizing('inspector')} className={`w-[4px] cursor-col-resize transition-all z-10 hover:bg-blue-500/40 ${isResizing === 'inspector' ? 'bg-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.4)]' : 'bg-transparent'}`} />
 
-          {/* Inspector */}
+          {/* Inspector / Chat Panel */}
           <div style={{ width: inspectorWidth }} className="shrink-0 flex flex-col overflow-hidden">
             <AnimatePresence mode="wait">
-              {view === 'edit' ? (
+              {isChatOpen ? (
+                <motion.div key="chat" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-full">
+                  <AIChatPanel
+                    project={project}
+                    onProjectUpdate={handleUpdateProject}
+                    onUndo={handleUndo}
+                    chatHistory={chatHistory}
+                    setChatHistory={setChatHistory}
+                  />
+                </motion.div>
+              ) : view === 'edit' ? (
                 <motion.div key="inspector" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-full">
                   <Inspector
                     clip={selectedClip}
@@ -777,6 +928,7 @@ const App: React.FC = () => {
             onSelectClip={(id) => { setSelectedClipId(id); setSelectedOverlayId(null); }}
             onSelectOverlay={(id) => { setSelectedOverlayId(id); setSelectedClipId(null); }}
             onToggleStatus={toggleClipStatus}
+            onDeleteClip={handleDeleteClip}
             onReorder={reorderClips}
             currentTime={currentTime}
             onSeek={handleSeek}
@@ -789,8 +941,10 @@ const App: React.FC = () => {
             onRemoveTrack={handleRemoveTrack}
             onUpdateOverlay={handleUpdateOverlay}
             onAddOverlay={handleAddOverlay}
+            onDeleteOverlay={handleDeleteOverlay}
             onUpdateBgMusic={handleUpdateBgMusic}
             onUpdateAudioClip={handleUpdateAudioClip}
+            onDeleteAudioClip={handleDeleteAudioClip}
             onSplitAudioClip={handleSplitAudioClip}
             onSplitBgMusic={handleSplitBgMusic}
           />

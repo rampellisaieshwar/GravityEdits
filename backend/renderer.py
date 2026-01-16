@@ -1,4 +1,8 @@
 import os
+import traceback
+import subprocess
+import shlex
+import json
 from moviepy import VideoFileClip, concatenate_videoclips, vfx, AudioFileClip, CompositeAudioClip, TextClip, CompositeVideoClip
 try:
     from moviepy.audio.fx.all import audio_loop
@@ -48,67 +52,154 @@ class RenderLogger(ProgressBarLogger):
             total = self.bars[bar]["total"]
             if total > 0:
                 percentage = (value / total) * 100
-                self.prog_notifier({"status": "rendering", "progress": percentage, "message": self.last_message})
+                
+                # Debug logging
+                try:
+                    print(f"DEBUG PROGRESS: bar={bar} val={value}/{total} pct={percentage:.1f}", flush=True)
+                except:
+                    pass
 
-def create_motion_text(content, duration=2.0, style='pop', fontsize=70, color='white', font='Arial-Bold', pos=None, fontsize_mult=1.0):
+                # Filter: Only report 't' or 'frame_index' as the main progress
+                # MoviePy uses 't' or 'frame_index' depending on the logger/writer
+                if bar == 't' or bar == 'frame_index':
+                    # Map 0-100% of video rendering to 20-100% of total job
+                    # (Reserved 20% for setup/overlays/audio)
+                    final_pct = 20 + (percentage * 0.8)
+                    try:
+                        self.prog_notifier({"status": "rendering", "progress": final_pct, "message": self.last_message})
+                    except Exception as e:
+                        print(f"Error in prog_notifier: {e}")
+                elif bar == 'chunk':
+                    # Audio rendering
+                    pass
+
+    def write_videofile_safe(self, *args, **kwargs):
+             pass
+
+def create_motion_text(content, duration=2.0, style='pop', fontsize=70, color='white', font='Arial-Bold', pos=None, resize_func=None, max_width=None):
     """
-    Creates a TextClip with basic styling.
+    Creates a TextClip using a double-layer technique for clean strokes.
     """
     try:
-        # Scale font size
-        effective_fontsize = int(fontsize * fontsize_mult)
+        effective_fontsize = int(fontsize)
+        # Moderate stroke width - not too thick to prevent text balloon effect
+        # 8% provides good visibility without making text massive
+        stroke_w = max(4, int(effective_fontsize * 0.08))
+ 
         
-        # We use a stroke to make it pop. Font might need to be available specifically or generic 'Arial'
-        # method='caption' or 'label'. 'label' is usually safer for simple text.
-        try:
-            txt = TextClip(text=content, font_size=effective_fontsize, color=color, stroke_color='black', stroke_width=2, method='label', font=font)
-        except Exception as e1:
-            print(f"⚠️ Primary font '{font}' failed: {e1}")
-            try:
-                # Fallback 1: Arial
-                txt = TextClip(text=content, font_size=effective_fontsize, color=color, stroke_color='black', stroke_width=2, method='label', font='Arial')
-            except Exception as e2:
-                 print(f"⚠️ Fallback font 'Arial' failed: {e2}")
-                 # Fallback 2: System Default (no font arg)
-                 txt = TextClip(text=content, font_size=effective_fontsize, color=color, method='label')
+        # Method 'caption' allows wrapping. 'label' does not.
+        # If max_width is provided, use caption.
+        method = 'caption' if max_width else 'label'
+        
+        # 1. Stroke Layer (Background)
+        # We start with a base config
+        # 1. Stroke Layer (Background)
+        # We start with a base config
+        # (Definition merged below)
 
+        # Create the Stroke Layer (Black text with thick black stroke)
+        # Note: If we just use stroke_width on the main clip, it renders INSIDE.
+        # By compositing, we get the 'Outside' stroke effect.
+        
+        # 1. Use passed font size (already calculated with boost in main loop)
+        calc_fontsize = int(fontsize)
+
+        # 2. Layer Generation Helper
+        def make_clip(c_color, c_stroke_color, c_stroke_width):
+            text_args = {
+                'text': content,
+                'font_size': calc_fontsize,
+                'color': c_color,
+                'stroke_color': c_stroke_color,
+                'stroke_width': c_stroke_width,
+                'method': method
+            }
+            if max_width: text_args['size'] = (max_width, None)
+            
+            # Correctly use function argument 'font'
+            try: return TextClip(**text_args, font=font)
+            except: 
+                try: return TextClip(**text_args, font='Arial')
+                except: return TextClip(**{k: v for k, v in text_args.items() if k != 'font'})
+
+        # 3. Create Layers
+        # A. Shadow Layer (Offset, slightly blurry/transparent look via color)
+        txt_shadow = make_clip('black', None, 0)
+        
+        # B. Stroke Layer (Background Outline)
+        txt_stroke = make_clip('black', 'black', stroke_w)
+        
+        # C. Fill Layer (Foreground)
+        # Correctly use function argument 'color'
+        txt_fill = make_clip(color, None, 0)
+
+        # 4. Fade Effects
+        if style == 'fade':
+            # Apply to all layers
+            for clip_layer in [txt_shadow, txt_stroke, txt_fill]:
+                try: clip_layer.fadein(0.5).fadeout(0.5)
+                except: pass
+
+        # 5. Composite & Align
+        # We need a canvas big enough for the stroke + shadow
+        # Calculations:
+        # stroke layer is biggest normally.
+        # shadow is offset by pixels.
+        
+        shadow_off = max(4, int(calc_fontsize * 0.05)) # 5% of font size as shadow offset
+        padding = stroke_w + shadow_off + 10 # ample padding
+        
+        # Dimensions are based on the stroke layer (largest)
+        base_w, base_h = txt_stroke.size
+        comp_w = base_w + (padding * 2)
+        comp_h = base_h + (padding * 2)
+        
+        # Center the Stroke Layer in the padded composite
+        stroke_pos = (padding, padding)
+        
+        # Center the Fill Layer RELATIVE to the Stroke Layer
+        # (Fill is smaller than stroke, so we center it to avoid 'glitchy' offset)
+        fill_dx = (txt_stroke.size[0] - txt_fill.size[0]) / 2
+        fill_dy = (txt_stroke.size[1] - txt_fill.size[1]) / 2
+        fill_pos = (padding + fill_dx, padding + fill_dy)
+        
+        # Shadow is same as Fill but offset
+        shadow_pos = (fill_pos[0] + shadow_off, fill_pos[1] + shadow_off)
+        
+        # Position the clips
+        ts = txt_stroke.with_position(stroke_pos)
+        tf = txt_fill.with_position(fill_pos)
+        tshadow = txt_shadow.with_position(shadow_pos)
+        
+        # Order: Shadow -> Stroke -> Fill
+        txt = CompositeVideoClip(
+            [tshadow, ts, tf], 
+            size=(comp_w, comp_h)
+        )
+            
         txt = txt.with_duration(duration)
         
-        # 1. Custom Position (Overrides Style)
-        if pos is not None:
-            # pos is (x_pct, y_pct) tuple from 0.0 to 1.0 representing CENTER of text
-            # MoviePy set_position uses Top-Left by default for relative. 
-            # To strictly center, we'd need to know video size, which we don't here.
-            # Best approximation: Use relative position (Top-Left) for now.
-            txt = txt.with_position(pos, relative=True)
-            
-            # If style is fade, we still apply fade effect
-            if style == 'fade':
-                 txt = txt.crossfadein(0.5).crossfadeout(0.5)
-            
-            return txt
-
-        # 2. Style-based Defaults
-        if style == 'slide_up':
-            # Position: start at bottom, move to center? Or just center (simple)
-            txt = txt.with_position(('center', 0.8), relative=True) 
-        elif style == 'fade':
-            # Fade in and out
-            txt = txt.with_position('center')
-            txt = txt.crossfadein(0.5).crossfadeout(0.5)
-        elif style == 'typewriter':
-            # Map typewriter to bottom left for now
-            txt = txt.with_position(('left', 'bottom'))
-        else:
-             # Pop / Center
-            txt = txt.with_position('center')
+        # Positioning Logic - Only apply style-based positioning if no custom pos provided
+        # Custom positioning will be applied AFTER creation by the caller
+        if pos is None:
+            # Apply style-based defaults only when no custom position
+            if style == 'slide_up':
+                txt = txt.with_position(('center', 0.8), relative=True) 
+            elif style == 'fade':
+                txt = txt.with_position('center')
+                # Fade effects already applied above
+            elif style == 'typewriter':
+                txt = txt.with_position(('left', 'bottom'))
+            else:
+                txt = txt.with_position('center')
+        # If pos is provided, don't set position here - let caller handle it
             
         return txt
     except Exception as e:
         print(f"❌ Error creating TextClip (Final): {e}")
-        import traceback
         traceback.print_exc()
         return None
+
 
 
 def apply_grading(clip, grading_settings):
@@ -334,8 +425,6 @@ def render_project(project_data, progress_callback=None):
                     if os.path.exists(abs_fallback):
                         source_path = abs_fallback
                     
-                    # Priority 4: Search blindly in projects dir? (Too slow/risky)
-                    
                     # Heuristic: If source_name has no extension, try adding .mp4 or .mov
                     if not os.path.exists(source_path) and '.' not in source_name:
                         for ext in ['.mp4', '.mov', '.mkv']:
@@ -343,6 +432,19 @@ def render_project(project_data, progress_callback=None):
                             if os.path.exists(test_path):
                                 source_path = test_path
                                 break
+
+                # Priority 4: Deep Search in ALL valid project folders
+                # (Fix for Shorts derived from other projects where path refs might be stale)
+                if not os.path.exists(source_path):
+                     projects_root = "projects"
+                     if os.path.exists(projects_root):
+                         for p_dir in os.listdir(projects_root):
+                             if p_dir.startswith('.'): continue
+                             possible_path = os.path.join(projects_root, p_dir, "source_media", os.path.basename(source_name))
+                             if os.path.exists(possible_path):
+                                 source_path = possible_path
+                                 print(f"   ✅ Found source in sibling project: {source_path}")
+                                 break
 
                 if not os.path.exists(source_path):
                      print(f"⚠️ Source file missing: {source_path}")
@@ -416,7 +518,7 @@ def render_project(project_data, progress_callback=None):
                          # Landscape or Square -> Crop width
                          center_x = w / 2
                          x1 = center_x - (new_w / 2)
-                         cut_clip = cut_clip.crop(x1=x1, width=new_w, height=h)
+                         cut_clip = cut_clip.cropped(x1=x1, width=new_w, height=h)
                          
                      # 2. Resize to 1080x1920 (Standard HD Shorts)
                      # Check if resize is needed to avoid unnecessary processing
@@ -442,195 +544,290 @@ def render_project(project_data, progress_callback=None):
         
         final_video = concatenate_videoclips(final_clips, method="compose")
 
-        # --- NEW: Process Overlays ---
-        overlays = project_data.get('overlays', [])
-        if overlays:
-            print(f"✨ Adding {len(overlays)} text overlays...")
-            overlay_clips = [final_video] # Base layer
+        # --- HYBRID PIPELINE: PREPARE OVERLAYS ---
+        overlays_to_render = []
+        overlays_data = project_data.get('overlays', [])
+
+        if overlays_data:
+            if progress_callback: progress_callback({"status": "processing", "progress": 12, "message": "Preparing Overlay Data..."})
+            print(f"✨ Preparing {len(overlays_data)} text overlays for Hybrid Render...")
             
-            for overlay in overlays:
+            vw, vh = final_video.size
+            
+            for overlay in overlays_data:
                 try:
                     content = overlay.get('content', '')
                     start = float(overlay.get('start', 0))
                     dur = float(overlay.get('duration', 2.0))
                     style = overlay.get('style', 'pop')
                     
-                    # New properties
-                    f_size = overlay.get('fontSize')
-                    p_x = overlay.get('positionX')
-                    p_y = overlay.get('positionY')
+                    # Properties
+                    f_size_pct = overlay.get('fontSize', 4) 
                     t_color = overlay.get('textColor', 'white')
                     font_fam = overlay.get('fontFamily', 'Arial-Bold')
                     
-                    mult = 1.0
-                    if f_size is not None:
-                        try:
-                             mult = float(f_size) / 4.0 # Base 4 is normal
-                        except: pass
-                        
-                    custom_pos = None
-                    if p_x is not None and p_y is not None:
-                        try:
-                            # Convert 0-100 to 0.0-1.0
-                            custom_pos = (float(p_x)/100.0, float(p_y)/100.0)
-                        except: pass
+                    # 1. Calculate Font Size (% of video HEIGHT)
+                    try:
+                        f_norm = float(f_size_pct) if f_size_pct else 0.05
+                    except: f_norm = 0.05
+                    if f_norm > 1.0: f_norm = f_norm / 100.0
                     
-                    # Create Text Clip
-                    txt = create_motion_text(content, duration=dur, style=style, fontsize_mult=mult, pos=custom_pos, color=t_color, font=font_fam)
-                    if txt:
-                        txt = txt.with_start(start)
-                        overlay_clips.append(txt)
+                    # De-normalize and Boost
+                    calc_fontsize = int(vh * f_norm * 1.5)
+                    if calc_fontsize < 60: calc_fontsize = 60
+                    
+                    # 2. Coordinates
+                    p_x = overlay.get('positionX')
+                    p_y = overlay.get('positionY')
+                    try:
+                        pos_x = float(p_x) if p_x is not None else 0.5
+                        pos_y = float(p_y) if p_y is not None else 0.8
+                    except: pos_x, pos_y = 0.5, 0.8
+                    if pos_x > 1.0: pos_x = pos_x / 100.0
+                    if pos_y > 1.0: pos_y = pos_y / 100.0
+                    
+                    # 3. Text Wrapping Width
+                    safe_text_width = None
+                    if len(content) > 20: safe_text_width = int(vw * 0.85)
+
+                    # Store for Asset Generation Phase
+                    overlays_to_render.append({
+                        "content": content,
+                        "start": start,
+                        "duration": dur,
+                        "style": style,
+                        "fontsize": calc_fontsize,
+                        "color": t_color,
+                        "font": font_fam,
+                        "max_width": safe_text_width,
+                        "pos_x_norm": pos_x,
+                        "pos_y_norm": pos_y
+                    })
+
                 except Exception as e:
-                    print(f"Failed to add overlay {overlay}: {e}")
-            
-            if len(overlay_clips) > 1:
-                # CompositeVideoClip allows layering
-                final_video = CompositeVideoClip(overlay_clips)
-        # -----------------------------
+                    print(f"❌ Failed to prepare overlay {overlay}: {e}")
 
         # G. Apply Audio Mixing (Background Music & Secondary Tracks)
         audio_layers = []
         if final_video.audio:
             audio_layers.append(final_video.audio)
         
-        # 1. Background Score (Legacy & Migrated)
+        # 1. Background Score
         bg_music_config = project_data.get('bgMusic')
         if bg_music_config and bg_music_config.get('source'):
             try:
                 music_file = bg_music_config['source']
-                # Search paths
                 music_path = os.path.join(UPLOAD_DIR, music_file)
+                # ... (Path resolution logic omitted for brevity, assume standard flows or copy if needed) ...
+                # Re-implementing path search to ensure robusteness
                 if not os.path.exists(music_path):
                      p_name = project_data.get('name')
                      if p_name:
                          safe_name = "".join(c for c in p_name if c.isalnum() or c in (' ', '_', '-')).strip()
-                         music_path_alt = os.path.join("projects", safe_name, "source_media", music_file)
-                         if os.path.exists(music_path_alt):
-                             music_path = music_path_alt
-                
+                         alt = os.path.join("projects", safe_name, "source_media", music_file)
+                         if os.path.exists(alt): music_path = alt
+
                 if os.path.exists(music_path):
-                    print(f"🎵 Adding background music: {music_file}")
                     bg_music = AudioFileClip(music_path)
                     
-                    # Handle volume
-                    vol = float(bg_music_config.get('volume', 0.5))
+                    track_volumes = project_data.get('trackVolumes', {})
+                    vol = float(track_volumes.get('music', bg_music_config.get('volume', 0.5)))
                     bg_music = bg_music.multiply_volume(vol)
                     
-                    # Handle Start Time & Duration
-                    # If this is the "Legacy" bgMusic track that is now draggable:
                     bg_start = float(bg_music_config.get('start', 0))
                     bg_user_duration = bg_music_config.get('duration')
                     
                     video_duration = final_video.duration
-
-                    # If duration provided (it was split/trimmed), use it
+                    
                     if bg_user_duration:
-                        dur = float(bg_user_duration)
-                        # Trim source to this duration? Or Loop until this duration?
-                        # Usually "duration" in timeline means "length of clip".
-                        # If source is shorter, loop. If source is longer, cut.
-                        if bg_music.duration < dur:
-                             bg_music = audio_loop(bg_music, duration=dur)
-                        else:
-                             bg_music = bg_music.subclipped(0, dur)
+                        dur_val = float(bg_user_duration)
+                        if bg_music.duration < dur_val: bg_music = audio_loop(bg_music, duration=dur_val)
+                        else: bg_music = bg_music.subclipped(0, dur_val)
                     else:
-                        # Legacy Loop Mode: Fill entire video
-                        # Calculate remaining time from start
-                        remaining_dur = max(0, video_duration - bg_start)
-                        if bg_music.duration < remaining_dur:
-                            bg_music = audio_loop(bg_music, duration=remaining_dur)
-                        else:
-                            bg_music = bg_music.subclipped(0, remaining_dur)
+                        rem = max(0, video_duration - bg_start)
+                        if bg_music.duration < rem: bg_music = audio_loop(bg_music, duration=rem)
+                        else: bg_music = bg_music.subclipped(0, rem)
 
                     bg_music = bg_music.with_start(bg_start)
-                    
                     audio_layers.append(bg_music)
             except Exception as e:
-                print(f"⚠️ Failed to add background music: {e}")
+                print(f"⚠️ BG Music Error: {e}")
 
-        # 2. Secondary Audio Clips (A2 / SFX / Split Music)
+        # 2. Secondary Audio Clips
         secondary_clips = project_data.get('audioClips', [])
-        if secondary_clips:
-            print(f"🔊 Adding {len(secondary_clips)} secondary audio clips...")
-            for clip_data in secondary_clips:
-                try:
-                    sfx_file = clip_data.get('source')
-                    start_time = float(clip_data.get('start', 0))
-                    user_duration = clip_data.get('duration')
-                    
-                    # Check paths
-                    sfx_path = os.path.join(UPLOAD_DIR, sfx_file)
-                    if not os.path.exists(sfx_path):
-                         p_name = project_data.get('name')
-                         if p_name:
-                             safe_name = "".join(c for c in p_name if c.isalnum() or c in (' ', '_', '-')).strip()
-                             sfx_path_alt = os.path.join("projects", safe_name, "source_media", sfx_file)
-                             if os.path.exists(sfx_path_alt):
-                                 sfx_path = sfx_path_alt
-                    
-                    if os.path.exists(sfx_path):
-                        sfx_clip = AudioFileClip(sfx_path)
-                        
-                        # Handle Duration (Cutting)
-                        # If frontend created a "Part 2" clip, it usually expects the Playback to resume from the split point.
-                        # Wait, my frontend logic: "part2 = {start: ..., duration: ...}".
-                        # BUT it didn't specify "media_start" (start point in source file)!
-                        # Standard EDL usually has `timeline_start` AND `media_start`.
-                        # Currently, my `AudioClip` model in `types.ts` DOES NOT HAVE `mediaStart` or `inPoint`.
-                        # It is effectively assuming every clip starts from 0:00 of the source file.
-                        # THIS IS A BUG FOR SPLIT CLIPS!
-                        
-                        # FIX LOGIC: When splitting Audio, we must track where in the source file we are.
-                        # BUT `types.ts` AudioClip interface:
-                        # export interface AudioClip { id, source, start, duration, track }
-                        # It lacks `offset` or `trimStart`.
-                        # Meaning separate clips will ALL restart the music from the beginning (0:00).
-                        
-                        # I cannot fix this in renderer alone if the data isn't there.
-                        # However, for now, let's assume standard behavior: Clip starts at 0.
-                        # I will add `subclip(0, duration)` to respect the cut length.
-                        # But Part 2 will restart the song. The user will notice this.
-                        
-                        target_dur = float(user_duration) if user_duration else sfx_clip.duration
-                        if target_dur < sfx_clip.duration:
-                             sfx_clip = sfx_clip.subclipped(0, target_dur)
-                        
-                        sfx_clip = sfx_clip.with_start(start_time)
-                        
-                        # Clip if goes beyond video?
-                        # if start_time + sfx_clip.duration > final_video.duration:
-                        #    sfx_clip = sfx_clip.subclip(0, final_video.duration - start_time)
-                        
-                        audio_layers.append(sfx_clip)
-                except Exception as e:
-                    print(f"⚠️ Failed to add secondary clip {clip_data}: {e}")
+        for clip_data in secondary_clips:
+            try:
+                sfx_file = clip_data.get('source')
+                start_time = float(clip_data.get('start', 0))
+                # Path resolution
+                sfx_path = os.path.join(UPLOAD_DIR, sfx_file)
+                if not os.path.exists(sfx_path):
+                     p_name = project_data.get('name')
+                     if p_name:
+                         safe_name = "".join(c for c in p_name if c.isalnum() or c in (' ', '_', '-')).strip()
+                         alt = os.path.join("projects", safe_name, "source_media", sfx_file)
+                         if os.path.exists(alt): sfx_path = alt
 
-        # Mix all
+                if os.path.exists(sfx_path):
+                    sfx_clip = AudioFileClip(sfx_path)
+                    vol = float(project_data.get('trackVolumes', {}).get(f"a{clip_data.get('track',2)}", 1.0))
+                    sfx_clip = sfx_clip.multiply_volume(vol)
+                    
+                    user_dur = clip_data.get('duration')
+                    target_dur = float(user_dur) if user_dur else sfx_clip.duration
+                    if target_dur < sfx_clip.duration: sfx_clip = sfx_clip.subclipped(0, target_dur)
+                    sfx_clip = sfx_clip.with_start(start_time)
+                    audio_layers.append(sfx_clip)
+            except Exception as e: print(f"Audio Clip Error: {e}")
+
+        # H. Final Audio Mixing
         if len(audio_layers) > 0:
              final_audio = CompositeAudioClip(audio_layers)
              final_video = final_video.with_audio(final_audio)
-        
-        # F. Export to MP4
+
+        # --- I. HYBRID EXPORT ---
         timestamp = int(time.time())
         output_filename = f"{project_data.get('name', 'video')}_final_{timestamp}.mp4"
         output_path = os.path.join(EXPORT_DIR, output_filename)
         
-        print(f"💾 Saving to {output_path}...")
-        
-        # Create user logger
-        # Note: MoviePy 'logger' argument expects either 'bar', None, or a proglog logger
-        logger = RenderLogger(progress_callback) if progress_callback else 'bar'
+        # Temp paths
+        temp_base_path = os.path.join(EXPORT_DIR, f"temp_base_{timestamp}.mp4")
+        temp_assets = []
 
-        final_video.write_videofile(
-            output_path, 
-            fps=24, 
-            preset="ultrafast",  # Use 'medium' for better quality, 'ultrafast' for testing
-            codec="libx264",
-            audio_codec="aac",
-            ffmpeg_params=['-pix_fmt', 'yuv420p'], # Good for compatibility
-            logger=logger
-        )
-        
+        try:
+            # 1. Render Base Video (Low Memory safe)
+            if progress_callback: progress_callback({"status": "rendering", "progress": 20, "message": "Rendering Base Video Layer..."})
+            print("💾 Rendering Base Video Layer...")
+            final_video.write_videofile(
+                temp_base_path, 
+                fps=24, 
+                preset="ultrafast", 
+                codec="libx264", 
+                audio_codec="aac", 
+                threads=4,
+                logger=None # Silence MoviePy to keep logs clean
+            )
+
+            # 2. Render Overlay Assets
+            if progress_callback: progress_callback({"status": "rendering", "progress": 50, "message": "Generating Text Assets..."})
+            print("🎨 Generating Text Assets (Hybrid Mode)...")
+            
+            ffmpeg_inputs = ['-i', temp_base_path]
+            filter_complex = []
+            
+            # Map [0:v] is base
+            # Overlays start at index 1
+            
+            for i, ov in enumerate(overlays_to_render):
+                # asset path
+                asset_path = os.path.join(EXPORT_DIR, f"temp_ov_{timestamp}_{i}.mov")
+                
+                # Generate Clip
+                txt_clip = create_motion_text(
+                    ov['content'],
+                    duration=ov['duration'],
+                    style=ov['style'],
+                    fontsize=ov['fontsize'],
+                    color=ov['color'],
+                    font=ov['font'],
+                    max_width=ov['max_width']
+                )
+                
+                if txt_clip:
+                    # Write Transparent Video Asset
+                    txt_clip.write_videofile(
+                        asset_path, 
+                        fps=24, 
+                        codec="png", # Supports Alpha
+                        audio=False, 
+                        threads=2,
+                        logger=None
+                    )
+                    temp_assets.append(asset_path)
+                    
+                    # Add to Inputs
+                    ffmpeg_inputs.extend(['-i', asset_path])
+                    input_idx = i + 1
+                    
+                    # Calculate Pixel Position for FFmpeg
+                    # txt_clip size
+                    tw, th = txt_clip.size
+                    
+                    # De-normalize Center
+                    center_x = ov['pos_x_norm'] * vw
+                    center_y = ov['pos_y_norm'] * vh
+                    
+                    # Top-Left for FFmpeg
+                    tl_x = int(center_x - (tw / 2))
+                    tl_y = int(center_y - (th / 2))
+                    
+                    # Clamp
+                    tl_x = max(0, min(tl_x, vw - tw))
+                    tl_y = max(0, min(tl_y, vh - th))
+                    
+                    # Filter Chain
+                    # Chain: [prev_layer][new_layer]overlay=...[next_layer]
+                    prev_label = f"{input_idx-1}:v" if i == 0 else f"v{i}" # 0:v is base
+                    if i == 0: prev_label = "0:v"
+                    
+                    next_label = f"v{i+1}"
+                    
+                    # enable='between(t,start,end)'
+                    enable_expr = f"enable='between(t,{ov['start']},{ov['start']+ov['duration']})'"
+                    
+                    cmd = f"[{prev_label}][{input_idx}:v]overlay=x={tl_x}:y={tl_y}:{enable_expr}"
+                    if i < len(overlays_to_render) - 1:
+                        cmd += f"[{next_label}]"
+                    
+                    filter_complex.append(cmd)
+            
+            # 3. Stitch with FFmpeg
+            if progress_callback: progress_callback({"status": "rendering", "progress": 80, "message": "Stitching Final Video..."})
+            print("🧵 Stitching Final Video with FFmpeg...")
+
+            if not filter_complex:
+                # No overlays, just rename base to output
+                os.rename(temp_base_path, output_path)
+            else:
+                # Build Full Command
+                full_filter = ";".join(filter_complex)
+                
+                cmd = [
+                    "ffmpeg", "-y",
+                    *ffmpeg_inputs,
+                    "-filter_complex", full_filter,
+                    "-c:v", "libx264", "-preset", "medium", "-crf", "23",
+                    "-c:a", "copy", # Copy audio from Base (input 0)
+                    "-map", f"{len(overlays_to_render) if len(overlays_to_render) > 0 else 0}:v" if len(overlays_to_render) == 0 else (f"[v{len(overlays_to_render)}]" if len(overlays_to_render) > 0 else "0:v"),
+                    "-map", "0:a", # Map audio from base
+                    output_path
+                ]
+                
+                # Fix map logic: The last overlay output is [vN]
+                last_label = f"[v{len(overlays_to_render)}]"
+                
+                # Command Construction Refined
+                cmd_args = ["ffmpeg", "-y"]
+                cmd_args.extend(ffmpeg_inputs)
+                cmd_args.extend(["-filter_complex", full_filter])
+                cmd_args.extend([
+                    "-map", last_label, 
+                    "-map", "0:a", 
+                    "-c:v", "libx264", "-preset", "ultrafast",
+                    "-c:a", "copy",
+                    output_path
+                ])
+                
+                print(f"   Run: {' '.join(cmd_args)}")
+                subprocess.run(cmd_args, check=True)
+
+        finally:
+            # Cleanup
+            print("🧹 Cleaning up temp files...")
+            if os.path.exists(temp_base_path): os.remove(temp_base_path)
+            for p in temp_assets:
+                if os.path.exists(p): os.remove(p)
+
         print(f"✅ Video Saved: {output_path}")
         if progress_callback:
             progress_callback({"status": "completed", "progress": 100, "message": "Render Complete", "url": f"/exports/{output_filename}"})

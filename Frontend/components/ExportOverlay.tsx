@@ -18,7 +18,19 @@ const ExportOverlay: React.FC<ExportOverlayProps> = ({ onClose, project, initial
   const [jobId, setJobId] = useState<string | null>(null);
   const [exportTarget, setExportTarget] = useState<number>(initialExportTarget !== undefined ? initialExportTarget : -1);
 
+  const [renderMode, setRenderMode] = useState<'local' | 'cloud'>('local');
   const projectName = project?.name || "Untitled_Edit";
+
+  // Auto-Download when finished
+  useEffect(() => {
+    if (status === 'finished' && downloadUrl) {
+      // Small delay to ensure UI updates first
+      const timer = setTimeout(() => {
+        handleDownload();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [status, downloadUrl]);
 
   // Polling for progress
   useEffect(() => {
@@ -49,6 +61,11 @@ const ExportOverlay: React.FC<ExportOverlayProps> = ({ onClose, project, initial
           alert("Render failed: " + data.message);
           setStatus('idle');
           setJobId(null);
+        } else if (data.status === 'cancelled') {
+          setJobId(null);
+          // onClose(); // Dont close automatically, let user see it was cancelled
+          setStatus('idle');
+          setLogs(prev => [...prev, "Cancelled by server."]);
         }
       } catch (e) {
         console.error("Polling error", e);
@@ -62,7 +79,7 @@ const ExportOverlay: React.FC<ExportOverlayProps> = ({ onClose, project, initial
     if (!project) return;
     setStatus('processing');
     setProgress(0);
-    setLogs(["Starting render job..."]);
+    setLogs([`Starting ${renderMode} render job...`]);
 
     try {
       // Determine clips based on selection
@@ -86,8 +103,58 @@ const ExportOverlay: React.FC<ExportOverlayProps> = ({ onClose, project, initial
         }
       }
 
+      // Remap Overlays for Shorts
+      let remappedOverlays = project.overlays;
+
+      // If exporting a Short, we must:
+      // 1. Filter audio/music to prevent duration extension (blank screen issue)
+      // 2. Remap text overlays to new time-slots
+      let exportBgMusic = project.bgMusic;
+      let exportAudioClips = project.audioClips;
+
+      if (exportTarget !== -1) {
+        // Disable global music/audio for snippets to ensure exact duration
+        // (Shorts usually have their own audio from the clips, or we need a sophisticated trimmer)
+        exportBgMusic = undefined;
+        exportAudioClips = [];
+
+        const newOverlays: any[] = [];
+        let currentNewTime = 0;
+
+        // Iterate clips in their new order
+        for (const clip of clipsToRender) {
+          const clipDur = (clip.end || 0) - (clip.start || 0);
+          if (clipDur <= 0) continue;
+
+          // Find overlays that belong to this clip's original time range
+          // Overlays in project.overlays have absolute 'start' time
+          // We check if overlay.start is within [clip.start, clip.end]
+          const relevant = project.overlays.filter(ov => {
+            const ovStart = Number(ov.start);
+            return ovStart >= (clip.start || 0) && ovStart < (clip.end || 0);
+          });
+
+          for (const ov of relevant) {
+            // Calculate relative offset from clip start
+            const offset = Number(ov.start) - (clip.start || 0);
+            const newStart = currentNewTime + offset;
+
+            newOverlays.push({
+              ...ov,
+              start: newStart
+            });
+          }
+
+          currentNewTime += clipDur;
+        }
+        remappedOverlays = newOverlays;
+      }
+
       // Prepare payload
+      const videodbKey = localStorage.getItem("gravity_videodb_key") || undefined;
       const payload = {
+        mode: renderMode,
+        videodb_key: videodbKey,
         project: {
           name: renderName,
           renderMode: (exportTarget !== -1) ? 'portrait' : 'landscape',
@@ -106,9 +173,9 @@ const ExportOverlay: React.FC<ExportOverlayProps> = ({ onClose, project, initial
             colorGrading: c.colorGrading
           })),
           // Include Background Music and Secondary Audio Chips
-          bgMusic: project.bgMusic,
-          audioClips: project.audioClips,
-          overlays: project.overlays
+          bgMusic: exportBgMusic,
+          audioClips: exportAudioClips,
+          overlays: remappedOverlays
         }
       };
 
@@ -214,9 +281,33 @@ const ExportOverlay: React.FC<ExportOverlayProps> = ({ onClose, project, initial
             )}
 
             <div className="w-full grid grid-cols-2 gap-4">
+              <button onClick={() => setRenderMode('local')} className={`p-4 rounded-xl border-2 transition-all flex flex-col gap-2 ${renderMode === 'local' ? 'border-blue-500 bg-blue-500/10' : 'border-[#333] hover:border-[#555] bg-[#111]'}`}>
+                <div className="flex items-center gap-2">
+                  <Cpu size={16} className={renderMode === 'local' ? "text-blue-400" : "text-gray-500"} />
+                  <span className="font-bold text-sm text-white">Standard Export</span>
+                </div>
+                <div className="text-xs text-gray-400 text-left">
+                  Renders on local server. <br />
+                  <span className="text-gray-500">Time: ~5-10 mins</span>
+                </div>
+              </button>
+
+              <button onClick={() => setRenderMode('cloud')} className={`p-4 rounded-xl border-2 transition-all flex flex-col gap-2 ${renderMode === 'cloud' ? 'border-purple-500 bg-purple-500/10' : 'border-[#333] hover:border-[#555] bg-[#111]'}`}>
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">⚡</span>
+                  <span className="font-bold text-sm text-white">Cloud Turbo (VideoDB)</span>
+                </div>
+                <div className="text-xs text-gray-400 text-left">
+                  Instant cloud rendering. <br />
+                  <span className="text-green-400 font-bold">Time: ~30 secs</span>
+                </div>
+              </button>
+            </div>
+
+            <div className="w-full grid grid-cols-2 gap-4 mt-4">
               <button onClick={onClose} className="p-4 rounded-xl bg-[#222] hover:bg-[#333] text-gray-400 font-bold text-xs uppercase transition-colors">Cancel</button>
-              <button onClick={handleStartRender} className="p-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs uppercase transition-colors shadow-lg shadow-blue-900/40 flex items-center justify-center gap-2">
-                <Cpu size={16} /> Start Render
+              <button onClick={handleStartRender} className={`p-4 rounded-xl font-bold text-xs uppercase transition-colors shadow-lg flex items-center justify-center gap-2 ${renderMode === 'cloud' ? 'bg-purple-600 hover:bg-purple-500 shadow-purple-900/40 text-white' : 'bg-blue-600 hover:bg-blue-500 shadow-blue-900/40 text-white'}`}>
+                {renderMode === 'cloud' ? '⚡ Cloud Render' : 'Start Render'}
               </button>
             </div>
           </motion.div>
@@ -267,6 +358,25 @@ const ExportOverlay: React.FC<ExportOverlayProps> = ({ onClose, project, initial
                   animate={{ width: `${progress}%` }}
                 />
               </div>
+            </div>
+
+            <div className="flex justify-center">
+              <button
+                onClick={async () => {
+                  if (jobId) {
+                    if (confirm("Are you sure you want to stop the rendering?")) {
+                      setLogs(prev => [...prev, "Stopping..."]);
+                      try {
+                        await fetch(`${API_BASE_URL}/cancel-export/${jobId}`, { method: 'POST' });
+                        onClose(); // Go back to editor immediately
+                      } catch (e) { console.error(e) }
+                    }
+                  }
+                }}
+                className="text-gray-500 hover:text-red-500 text-xs font-bold uppercase transition-colors"
+              >
+                Stop Rendering
+              </button>
             </div>
           </div>
         )}

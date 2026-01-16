@@ -1,5 +1,9 @@
 
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 # LLM Configuration
 # Change these values to switch models or providers globally
@@ -11,7 +15,7 @@ LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini")
 # For Ollama: "llama3", "mistral", "gemma"
 # For OpenAI: "gpt-4", "gpt-3.5-turbo"
 # For Gemini: "gemini-2.0-flash"
-LLM_MODEL = os.getenv("LLM_MODEL", "gemini-2.0-flash")
+LLM_MODEL = os.getenv("LLM_MODEL", "gemini-2.5-pro")
 
 # Connection Settings
 # Connection Settings

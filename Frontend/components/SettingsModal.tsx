@@ -11,6 +11,7 @@ interface SettingsModalProps {
 const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, isOpen }) => {
     const [apiKey, setApiKey] = useState("");
     const [provider, setProvider] = useState("gemini");
+    const [videoDbKey, setVideoDbKey] = useState("");
     const [userName, setUserName] = useState("");
     const [isVisible, setIsVisible] = useState(false);
 
@@ -19,10 +20,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, isOpen }) => {
         const savedKey = localStorage.getItem("gravity_api_key");
         const savedProvider = localStorage.getItem("gravity_llm_provider");
         const savedName = localStorage.getItem("gravity_user_name");
+        const savedVideoKey = localStorage.getItem("gravity_videodb_key");
 
         if (savedKey) setApiKey(savedKey);
         if (savedProvider) setProvider(savedProvider);
         if (savedName) setUserName(savedName);
+        if (savedVideoKey) setVideoDbKey(savedVideoKey);
     }, [isOpen]);
 
     const handleSave = () => {
@@ -30,6 +33,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, isOpen }) => {
             localStorage.setItem("gravity_api_key", apiKey.trim());
             localStorage.setItem("gravity_llm_provider", provider);
             localStorage.setItem("gravity_user_name", userName.trim() || "Editor"); // Default if empty
+
+            if (videoDbKey.trim()) {
+                localStorage.setItem("gravity_videodb_key", videoDbKey.trim());
+            } else {
+                localStorage.removeItem("gravity_videodb_key");
+            }
 
             // Dispatch event to update UI immediately
             window.dispatchEvent(new Event("profileUpdated"));
@@ -108,7 +117,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, isOpen }) => {
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">API Key</label>
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">AI API Key (Intelligence)</label>
                             <div className="relative">
                                 <input
                                     type={isVisible ? "text" : "password"}
@@ -127,6 +136,22 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, isOpen }) => {
                             <p className="text-[10px] text-gray-500 flex items-center gap-1">
                                 <AlertTriangle size={10} />
                                 {provider === 'gemini' ? "Requires a Google AI Studio Key." : "Requires an OpenAI Platform Key."}
+                            </p>
+                        </div>
+
+                        <div className="pt-4 border-t border-white/5 space-y-2">
+                            <label className="text-xs font-bold text-purple-400 uppercase tracking-wider block">VideoDB API Key (Cloud Render)</label>
+                            <div className="relative">
+                                <input
+                                    type={isVisible ? "text" : "password"}
+                                    value={videoDbKey}
+                                    onChange={(e) => setVideoDbKey(e.target.value)}
+                                    placeholder="Enter VideoDB API Key"
+                                    className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-500 transition-colors font-mono text-sm"
+                                />
+                            </div>
+                            <p className="text-[10px] text-gray-500">
+                                Required for Cloud Turbo rendering. Get one at <strong>videodb.io</strong>
                             </p>
                         </div>
                     </div>

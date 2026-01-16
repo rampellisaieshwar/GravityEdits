@@ -4,15 +4,19 @@ Gravity Edits is a modern, AI-powered video editing platform designed to streaml
 
 ## 🚀 Key Features
 
-*   **🤖 AI-Driven Analysis**: Automatically detects interesting scenes, dialogue, and "viral moments" from raw uploads using Google Gemini.
-*   **✂️ Smart Timeline**: A non-linear editor (NLE) with magnetic snapping, multi-track audio, and precise drag-and-drop capabilities.
-    *   **Draggable Background Music**: Customize the start time and duration of your soundtrack visually.
-    *   **Advanced Audio Tools**: Split, trim, and re-arrange secondary audio clips effortlessly.
+*   **🧠 Two-Stage AI Core**:
+    *   **Stage 1: The Inspector (Forensic Analyst)**: A specialized agent that scans transcripts for "Ghost Words" (hallucinations like "Banana"), broken sentences, and bad takes *before* editing begins.
+    *   **Stage 2: The Director (Creative Lead)**: A creative agent that uses the Inspector's "Hit List" to surgically edit the video, ensuring narrative flow while strictly adhering to the "Wakullah Protocol V2" for viral pacing.
+*   **⚡️ Async Hybrid Renderer**:
+    *   **Crash-Proof Architecture**: Combines the ease of **MoviePy** (for asset generation) with the raw performance of **FFmpeg** (for final stitching).
+    *   **Redis-Backed**: Uses reliable job queues (RQ) to manage workload, allowing heavy renders to happen in the background without freezing the UI.
+*   **📐 Precision Engineering**:
+    *   **Normalized Coordinates**: Frontend and Backend interact using a normalized (0-1) coordinate system, ensuring text overlays land *exactly* where you place them, regardless of resolution.
+    *   **16:9 Aspect Lock**: The interface forces a cinematic aspect ratio to prevent "Invisible Text" issues during export.
 *   **📱 Viral Shorts Mode**: Instantly generates 9:16 vertical videos optimized for TikTok/Reels/Shorts, complete with smart cropping.
-*   **💬 AI Chat Assistant**: Context-aware chat (powered by LangChain) allows you to ask questions about your video or request specific edits using natural language.
-*   **🔑 BYOK Architecture**: **Bring Your Own Key** system. Your API keys (Gemini) are stored locally in your browser for maximum security and privacy. No backend storage of sensitive keys.
+*   **🗣 Auto-Captioning**: Automatically generates standard `.srt` subtitle files for accessibility and SEO, synced perfectly with the final cut.
+*   **🔑 BYOK Architecture**: **Bring Your Own Key** system. Your API keys (Gemini) are stored locally in your browser for maximum security and privacy.
 *   **🎨 Color & Effects**: Basic color grading (Temperature, Exposure, Contrast) and text overlays.
-*   **⚡ Local Rendering**: High-performance rendering pipeline built on **MoviePy** and **OpenCV** to generate MP4s directly on your machine (or server).
 
 ## 🛠 Tech Stack
 
@@ -21,21 +25,21 @@ Gravity Edits is a modern, AI-powered video editing platform designed to streaml
 *   **Vite**: Blazing fast build tool.
 *   **Tailwind CSS**: Modern, responsive styling.
 *   **Framer Motion**: Smooth, professional animations and drag-and-drop interactions.
-*   **Lucide React**: Beautiful, consistent iconography.
 
 ### Backend
 *   **Python 3.10+**: Core logic.
 *   **FastAPI**: High-performance async web framework.
+*   **Redis** & **RQ**: Task queue and background worker management.
 *   **MoviePy**: Programmatic video editing and rendering.
 *   **OpenCV**: Frame processing and analysis.
 *   **Google Gemini (GenAI)**: The intelligence behind the scene detection.
-*   **LangChain**: Orchestrating complex AI interactions.
 
 ## 📦 Installation & Setup
 
 ### Prerequisites
 *   Node.js (v18+)
 *   Python (v3.10+)
+*   **Redis Server** (Required for background tasks)
 *   FFmpeg (Required for MoviePy)
 
 ### 1. Clone the Repository
@@ -45,41 +49,49 @@ cd GravityEdits
 ```
 
 ### 2. Backend Setup
-Navigate to the root directory (where `backend/` is located) and set up the Python environment.
+Navigate to the root directory.
 
 ```bash
 # Create a virtual environment (optional but recommended)
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-# Install dependencies
-pip install fastapi "uvicorn[standard]" python-multipart opencv-python moviepy google-generativeai langchain langchain-google-genai proglog
+# Install dependencies (including redis, rq, fastapi)
+pip install -r backend/requirements.txt
 ```
-
-> **Note**: Verify you have `ffmpeg` installed on your system path.
 
 ### 3. Frontend Setup
 Navigate to the Frontend directory.
 
 ```bash
 cd Frontend
-
-# Install dependencies
 npm install
 ```
 
+### 4. Start Redis
+Ensure Redis is installed and running.
+*   **Mac**: `brew install redis && brew services start redis`
+*   **Linux**: `sudo apt install redis-server && sudo service redis-server start`
+
 ## 🏃‍♂️ Running the Application
 
-You need to run both the Backend (server) and Frontend (client) concurrently.
+You need to run three processes: API Server, Background Worker, and Frontend.
 
-### Terminal 1: Backend
+### Terminal 1: API Server
 From the root directory:
 ```bash
 uvicorn backend.main:app --reload
 ```
 *The server will start at `http://127.0.0.1:8000`.*
 
-### Terminal 2: Frontend
+### Terminal 2: Background Worker
+From the root directory:
+```bash
+./start_worker.sh
+```
+*This handles video rendering and AI analysis tasks asynchronously.*
+
+### Terminal 3: Frontend
 From the `Frontend` directory:
 ```bash
 npm run dev
@@ -88,15 +100,13 @@ npm run dev
 
 ## 📝 Usage Guide
 
-1.  **Welcome**: Open the app. If it's your first time, click the **Profile** icon (top right) to enter your **Gemini API Key** and set your Display Name.
-2.  **Upload**: Click "Upload Video" to select a raw file.
-3.  **Analyze**: The AI will process the video. Review the summary and suggested "Viral Shorts" clips.
+1.  **Welcome**: Open the app. Setup your profile with a **Gemini API Key**.
+2.  **Upload**: Click "Upload Video". The AI Analysis job runs in the background.
+3.  **Analyze**: Review the timeline and viral clips generated by Gemini.
 4.  **Edit**:
-    *   **Timeline**: Drag clips to reorder.
-    *   **Trim**: Use the Razor tool (Scissors icon) to split video or audio tracks.
-    *   **Music**: Drag the purple music bar to sync the beat with your video.
-    *   **Overlays**: Add text overlays for captions or titles.
-5.  **Export**: Click "Export Video" to render the final MP4. You can also "Download Project" to save the state.
+    *   **Command**: Use the Chat to say "Cut the silence", "Make it faster".
+    *   **Manual**: Drag, drop, split, and grade clips manually.
+5.  **Export**: Click "Export Video". The render job is queued and processed by the worker.
 
 ## 🤝 Contributing
 Contributions are welcome! Please fork the repository and submit a Pull Request.

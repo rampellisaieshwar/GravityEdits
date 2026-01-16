@@ -99,22 +99,35 @@ const Inspector: React.FC<InspectorProps> = ({ clip, overlay, onUpdateOverlay, o
             </div>
           </section>
 
-          {/* Size Control */}
+          {/* Size Control - Normalized % of Height */}
           <section>
             <div className="flex justify-between items-center mb-2">
-              <label className="text-[9px] font-bold text-gray-500 uppercase tracking-widest block">Size</label>
-              <span className="text-[9px] text-gray-400">{overlay.fontSize || 4}</span>
+              <label className="text-[9px] font-bold text-gray-500 uppercase tracking-widest block">Size (% Height)</label>
+              <span className="text-[9px] text-gray-400">
+                {(() => {
+                  const val = overlay.fontSize || 0.08;
+                  // If < 1, it's normalized (0.05 = 5%). If > 1, it's old (4 = 4%)
+                  return (val < 1 ? val * 100 : val).toFixed(1);
+                })()}%
+              </span>
             </div>
             <input
               type="range"
               min="1" max="20" step="0.5"
-              value={overlay.fontSize || 4}
-              onChange={(e) => onUpdateOverlay?.({ fontSize: parseFloat(e.target.value) })}
+              value={(() => {
+                const val = overlay.fontSize || 0.08;
+                return val < 1 ? val * 100 : val;
+              })()}
+              onChange={(e) => {
+                const percent = parseFloat(e.target.value);
+                // Save as normalized (0.08)
+                onUpdateOverlay?.({ fontSize: percent / 100 });
+              }}
               className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer"
             />
           </section>
 
-          {/* Position Control */}
+          {/* Position Control - Normalized 0-1 */}
           <section>
             <label className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-2 block">Position (X / Y)</label>
             <div className="space-y-2">
@@ -123,22 +136,38 @@ const Inspector: React.FC<InspectorProps> = ({ clip, overlay, onUpdateOverlay, o
                 <input
                   type="range"
                   min="0" max="100"
-                  value={overlay.positionX !== undefined ? overlay.positionX : 50}
-                  onChange={(e) => onUpdateOverlay?.({ positionX: parseFloat(e.target.value) })}
+                  value={(() => {
+                    const val = overlay.positionX !== undefined ? overlay.positionX : 0.5;
+                    return val <= 1 ? val * 100 : val;
+                  })()}
+                  onChange={(e) => onUpdateOverlay?.({ positionX: parseFloat(e.target.value) / 100 })}
                   className="flex-1 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer"
                 />
-                <span className="text-[9px] text-gray-400 w-6 text-right">{overlay.positionX !== undefined ? overlay.positionX : 50}%</span>
+                <span className="text-[9px] text-gray-400 w-6 text-right">
+                  {(() => {
+                    const val = overlay.positionX !== undefined ? overlay.positionX : 0.5;
+                    return (val <= 1 ? val * 100 : val).toFixed(0);
+                  })()}%
+                </span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-[9px] text-gray-500 w-4">Y</span>
                 <input
                   type="range"
                   min="0" max="100"
-                  value={overlay.positionY !== undefined ? overlay.positionY : 50}
-                  onChange={(e) => onUpdateOverlay?.({ positionY: parseFloat(e.target.value) })}
+                  value={(() => {
+                    const val = overlay.positionY !== undefined ? overlay.positionY : 0.8;
+                    return val <= 1 ? val * 100 : val;
+                  })()}
+                  onChange={(e) => onUpdateOverlay?.({ positionY: parseFloat(e.target.value) / 100 })}
                   className="flex-1 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer"
                 />
-                <span className="text-[9px] text-gray-400 w-6 text-right">{overlay.positionY !== undefined ? overlay.positionY : 50}%</span>
+                <span className="text-[9px] text-gray-400 w-6 text-right">
+                  {(() => {
+                    const val = overlay.positionY !== undefined ? overlay.positionY : 0.8;
+                    return (val <= 1 ? val * 100 : val).toFixed(0);
+                  })()}%
+                </span>
               </div>
             </div>
           </section>
