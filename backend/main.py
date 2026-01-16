@@ -409,6 +409,7 @@ async def regenerate_project_xml(project_name: str, request: Optional[Regenerate
 class ExportRequest(BaseModel):
     project: dict 
     mode: Optional[str] = "local" 
+    videodb_key: Optional[str] = None
 
 @app.post("/export-video/")
 async def export_video(request: ExportRequest):
@@ -425,6 +426,7 @@ async def export_video(request: ExportRequest):
                 "backend.worker.tasks.perform_videodb_export_task",
                 request.project, 
                 EXPORT_DIR,
+                videodb_key=request.videodb_key, # Pass key
                 job_timeout='1h',
                 at_front=True # CRITICAL: Cloud Users skip the line!
             )

@@ -122,7 +122,7 @@ def perform_analysis_task(video_paths, project_name, output_dir, user_descriptio
 
 
 # --- TASK: VIDEODB EXPORT ---
-def perform_videodb_export_task(project_data, output_dir):
+def perform_videodb_export_task(project_data, output_dir, videodb_key=None):
     job = get_current_job()
     print(f"☁️ Starting VideoDB Export: Job {job.id if job else 'Unknown'}")
     
@@ -130,7 +130,7 @@ def perform_videodb_export_task(project_data, output_dir):
     
     try:
         from backend.videodb_adapter import VideoDBAdapter
-        adapter = VideoDBAdapter()
+        adapter = VideoDBAdapter(api_key=videodb_key)
         
         def render_progress(data):
             # Adapt callback to RQ meta

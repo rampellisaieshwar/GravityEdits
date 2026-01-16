@@ -151,8 +151,10 @@ const ExportOverlay: React.FC<ExportOverlayProps> = ({ onClose, project, initial
       }
 
       // Prepare payload
+      const videodbKey = localStorage.getItem("gravity_videodb_key") || undefined;
       const payload = {
         mode: renderMode,
+        videodb_key: videodbKey,
         project: {
           name: renderName,
           renderMode: (exportTarget !== -1) ? 'portrait' : 'landscape',
