@@ -4,24 +4,19 @@ Gravity Edits is a modern, AI-powered video editing platform designed to streaml
 
 ## 🚀 Key Features
 
-*   **🤖 Agentic AI Editor**: A fully autonomous AI (Gemini 2.5 Pro) that acts as a pair programmer for your video.
-    *   **Natural Language Editing**: Command the AI to "Cut the part about bananas," "Add a Subscribe text at 5s," or "Fix the transcript."
-    *   **Command System**: The AI emits structured commands (Cut, Split, Add Text, Move) that are executed deterministically.
-    *   **Intelligent Resolution**: It understands context. "Make it red" means Reject. "Make it Green" means Keep. It finds clips by content automatically.
-*   **⚡️ Async Rendering Engine**:
-    *   **Non-Blocking**: Heavy tasks like Video Analysis and Rendering are handled by a dedicated background worker system.
-    *   **Redis-Backed**: Uses reliable job queues (RQ) to manage workload and prevent server stalls.
-*   **👻 Ghostbuster Protocol ("Wakullah")**:
-    *   **Hallucination Filter**: Automatically removes low-confidence "phantom words" (e.g., random "Thank you" or "Banana" in silence) from the transcript before the AI even sees it.
-    *   **Skeptical Mode**: The AI is instructed to actively distrust the transcript if words seem contextually "stupid" or out of place, surgically removing them.
-*   **✂️ Smart Timeline**: A non-linear editor (NLE) with magnetic snapping, multi-track audio, and precise drag-and-drop capabilities.
-    *   **Draggable Background Music**: Customize the start time and duration of your soundtrack visually.
-    *   **Advanced Audio Tools**: Split, trim, and re-arrange secondary audio clips effortlessly.
+*   **🧠 Two-Stage AI Core**:
+    *   **Stage 1: The Inspector (Forensic Analyst)**: A specialized agent that scans transcripts for "Ghost Words" (hallucinations like "Banana"), broken sentences, and bad takes *before* editing begins.
+    *   **Stage 2: The Director (Creative Lead)**: A creative agent that uses the Inspector's "Hit List" to surgically edit the video, ensuring narrative flow while strictly adhering to the "Wakullah Protocol V2" for viral pacing.
+*   **⚡️ Async Hybrid Renderer**:
+    *   **Crash-Proof Architecture**: Combines the ease of **MoviePy** (for asset generation) with the raw performance of **FFmpeg** (for final stitching).
+    *   **Redis-Backed**: Uses reliable job queues (RQ) to manage workload, allowing heavy renders to happen in the background without freezing the UI.
+*   **📐 Precision Engineering**:
+    *   **Normalized Coordinates**: Frontend and Backend interact using a normalized (0-1) coordinate system, ensuring text overlays land *exactly* where you place them, regardless of resolution.
+    *   **16:9 Aspect Lock**: The interface forces a cinematic aspect ratio to prevent "Invisible Text" issues during export.
 *   **📱 Viral Shorts Mode**: Instantly generates 9:16 vertical videos optimized for TikTok/Reels/Shorts, complete with smart cropping.
-*   **� Auto-Captioning**: Automatically generates standard `.srt` subtitle files for accessibility and SEO, synced perfectly with the final cut.
-*   **�🔑 BYOK Architecture**: **Bring Your Own Key** system. Your API keys (Gemini) are stored locally in your browser for maximum security and privacy. No backend storage of sensitive keys.
+*   **🗣 Auto-Captioning**: Automatically generates standard `.srt` subtitle files for accessibility and SEO, synced perfectly with the final cut.
+*   **🔑 BYOK Architecture**: **Bring Your Own Key** system. Your API keys (Gemini) are stored locally in your browser for maximum security and privacy.
 *   **🎨 Color & Effects**: Basic color grading (Temperature, Exposure, Contrast) and text overlays.
-*   **🚀 Efficient**: Local rendering pipeline built on **MoviePy** and **OpenCV**.
 
 ## 🛠 Tech Stack
 
