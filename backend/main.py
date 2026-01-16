@@ -13,7 +13,7 @@ import time
 from datetime import datetime
 from rq.job import Job
 from rq.exceptions import NoSuchJobError
-from .redis_config import redis_conn, q_render, q_analysis
+from .redis_config import redis_conn, q_render, q_analysis, q_videodb, q_videodb
 
 # Import our modules
 try:
@@ -408,34 +408,41 @@ async def regenerate_project_xml(project_name: str, request: Optional[Regenerate
 
 class ExportRequest(BaseModel):
     project: dict 
+    mode: Optional[str] = "local" 
 
 @app.post("/export-video/")
 async def export_video(request: ExportRequest):
+    mode = getattr(request, 'mode', 'local') # Handle if mode is missing
+    
+    # Common check
     if not q_render:
          return {"error": "Render Service Unavailable (Redis Queue)"}
     
     try:
-        # Enqueue job
-        job = q_render.enqueue(
-            "backend.worker.tasks.perform_export_task",
-            request.project, 
-            EXPORT_DIR,
-            job_timeout='1h'
-        )
-        
-        # DEBUG: Log payload
-        try:
-            debug_path = os.path.join(os.getcwd(), "debug_payload.log")
-            with open(debug_path, "w") as f:
-                clips = request.project.get('clips', [])
-                f.write(f"Export Job Enqueued: {job.id}\n")
-                f.write(f"Total Clips: {len(clips)}\n")
-        except: pass
-
-        return {"status": "queued", "job_id": job.id}
+        if mode == "cloud":
+            # Use q_render but with Cloud Task Function and High Priority
+            job = q_render.enqueue(
+                "backend.worker.tasks.perform_videodb_export_task",
+                request.project, 
+                EXPORT_DIR,
+                job_timeout='1h',
+                at_front=True # CRITICAL: Cloud Users skip the line!
+            )
+            return {"status": "queued", "job_id": job.id, "mode": "cloud"}
+        else:
+            # Local Standard
+            job = q_render.enqueue(
+                "backend.worker.tasks.perform_export_task",
+                request.project, 
+                EXPORT_DIR,
+                job_timeout='1h'
+            )
+            return {"status": "queued", "job_id": job.id, "mode": "local"}
+            
     except Exception as e:
         print(f"Failed to enqueue export: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/export-status/{job_id}")
 async def get_export_status(job_id: str):

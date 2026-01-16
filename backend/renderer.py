@@ -422,8 +422,6 @@ def render_project(project_data, progress_callback=None):
                     if os.path.exists(abs_fallback):
                         source_path = abs_fallback
                     
-                    # Priority 4: Search blindly in projects dir? (Too slow/risky)
-                    
                     # Heuristic: If source_name has no extension, try adding .mp4 or .mov
                     if not os.path.exists(source_path) and '.' not in source_name:
                         for ext in ['.mp4', '.mov', '.mkv']:
@@ -431,6 +429,19 @@ def render_project(project_data, progress_callback=None):
                             if os.path.exists(test_path):
                                 source_path = test_path
                                 break
+
+                # Priority 4: Deep Search in ALL valid project folders
+                # (Fix for Shorts derived from other projects where path refs might be stale)
+                if not os.path.exists(source_path):
+                     projects_root = "projects"
+                     if os.path.exists(projects_root):
+                         for p_dir in os.listdir(projects_root):
+                             if p_dir.startswith('.'): continue
+                             possible_path = os.path.join(projects_root, p_dir, "source_media", os.path.basename(source_name))
+                             if os.path.exists(possible_path):
+                                 source_path = possible_path
+                                 print(f"   ✅ Found source in sibling project: {source_path}")
+                                 break
 
                 if not os.path.exists(source_path):
                      print(f"⚠️ Source file missing: {source_path}")

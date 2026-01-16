@@ -119,3 +119,53 @@ def perform_analysis_task(video_paths, project_name, output_dir, user_descriptio
         traceback.print_exc()
         update_job_progress(status="failed", message=str(e))
         raise e
+
+
+# --- TASK: VIDEODB EXPORT ---
+def perform_videodb_export_task(project_data, output_dir):
+    job = get_current_job()
+    print(f"☁️ Starting VideoDB Export: Job {job.id if job else 'Unknown'}")
+    
+    update_job_progress(progress=0, status="processing", message="Initializing Cloud Render...")
+    
+    try:
+        from backend.videodb_adapter import VideoDBAdapter
+        adapter = VideoDBAdapter()
+        
+        def render_progress(data):
+            # Adapt callback to RQ meta
+            if isinstance(data, dict):
+                p = data.get('progress')
+                m = data.get('message')
+                s = data.get('status')
+                # Only update if meaningful
+                kwargs = {}
+                if s: kwargs['status'] = s
+                
+                update_job_progress(progress=p, message=m, **kwargs)
+        
+        # Run Adapter
+        # Note: We now return a local file path usually.
+        result = adapter.render_project(project_data, progress_callback=render_progress)
+        
+        url = result
+        if result and os.path.exists(result):
+             # It's a file path
+             filename = os.path.basename(result)
+             url = f"/exports/{filename}"
+        
+        update_job_progress(
+            progress=100, 
+            status="completed", 
+            message="Cloud Render Complete", 
+            url=url,
+            mode="cloud"
+        )
+        return url
+        
+    except Exception as e:
+        print(f"❌ VideoDB Task Failed: {e}")
+        traceback.print_exc()
+        update_job_progress(status="failed", message=str(e))
+        raise e
+

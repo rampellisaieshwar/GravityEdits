@@ -6,38 +6,44 @@ import os
 def transcribe_audio_file(audio_path):
     print(f"Loading Whisper Model for {audio_path}...", file=sys.stderr)
     try:
-        from faster_whisper import WhisperModel
+        import whisper
+        import warnings
+        
+        # Suppress FP16 warning on CPU
+        warnings.filterwarnings("ignore")
+        
         model_size = os.getenv("WHISPER_MODEL", "tiny.en")
         
-        # Run on CPU with int8 to save memory/compatibility
-        model = WhisperModel(model_size, device="cpu", compute_type="int8")
+        # Load model (standard OpenAI Whisper)
+        model = whisper.load_model(model_size)
         
-        segments, info = model.transcribe(audio_path, beam_size=5, word_timestamps=True)
+        # Transcribe
+        result = model.transcribe(audio_path, word_timestamps=True)
         
         clips = []
-        for s in segments:
+        for s in result.get("segments", []):
             clip_words = []
-            if s.words:
-                for w in s.words:
-                    if w.probability >= 0.20:  # Relaxed Filter: Only delete absolute noise
+            if "words" in s:
+                for w in s["words"]:
+                    # OpenAI Whisper structure: {word, start, end, probability}
+                    prob = w.get("probability", 1.0)
+                    if prob >= 0.20:
                         clip_words.append({
-                            "word": w.word.strip(),
-                            "start": round(w.start, 2),
-                            "end": round(w.end, 2),
-                            "probability": round(w.probability, 2)
+                            "word": w.get("word", "").strip(),
+                            "start": round(w.get("start"), 2),
+                            "end": round(w.get("end"), 2),
+                            "probability": round(prob, 2)
                         })
-
-            # Rebuild text from verified words only
-            clean_text = " ".join([w["word"] for w in clip_words])
             
-            # Fallback: If heavy filtering removed everything, keep original text to avoid "[Transcription Failed]"
-            final_text = clean_text if clean_text.strip() else s.text.strip()
-
+            # Rebuild text
+            clean_text = " ".join([w["word"] for w in clip_words])
+            final_text = clean_text if clean_text.strip() else s.get("text", "").strip()
+            
             clips.append({
-                "start": round(s.start, 2),
-                "end": round(s.end, 2),
+                "start": round(s.get("start"), 2),
+                "end": round(s.get("end"), 2),
                 "text": final_text,
-                "words": clip_words, # Might be empty if confidence low, AI must handle this
+                "words": clip_words,
                 "visual_data": {} 
             })
             
@@ -45,6 +51,8 @@ def transcribe_audio_file(audio_path):
         
     except Exception as e:
         print(f"Transcription Error: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
         sys.exit(1)
 
 if __name__ == "__main__":

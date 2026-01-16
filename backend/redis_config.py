@@ -20,7 +20,9 @@ if redis_conn:
     q_default = Queue('default', connection=redis_conn)
     q_analysis = Queue('analysis', connection=redis_conn)
     q_render = Queue('render', connection=redis_conn)
+    q_videodb = Queue('videodb', connection=redis_conn)
 else:
     q_default = None
     q_analysis = None
     q_render = None
+    q_videodb = None
