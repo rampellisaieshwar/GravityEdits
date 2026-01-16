@@ -1,4 +1,5 @@
 import os
+import traceback
 from moviepy import VideoFileClip, concatenate_videoclips, vfx, AudioFileClip, CompositeAudioClip, TextClip, CompositeVideoClip
 try:
     from moviepy.audio.fx.all import audio_loop
@@ -48,7 +49,29 @@ class RenderLogger(ProgressBarLogger):
             total = self.bars[bar]["total"]
             if total > 0:
                 percentage = (value / total) * 100
-                self.prog_notifier({"status": "rendering", "progress": percentage, "message": self.last_message})
+                
+                # Debug logging
+                try:
+                    print(f"DEBUG PROGRESS: bar={bar} val={value}/{total} pct={percentage:.1f}", flush=True)
+                except:
+                    pass
+
+                # Filter: Only report 't' or 'frame_index' as the main progress
+                # MoviePy uses 't' or 'frame_index' depending on the logger/writer
+                if bar == 't' or bar == 'frame_index':
+                    # Map 0-100% of video rendering to 20-100% of total job
+                    # (Reserved 20% for setup/overlays/audio)
+                    final_pct = 20 + (percentage * 0.8)
+                    try:
+                        self.prog_notifier({"status": "rendering", "progress": final_pct, "message": self.last_message})
+                    except Exception as e:
+                        print(f"Error in prog_notifier: {e}")
+                elif bar == 'chunk':
+                    # Audio rendering
+                    pass
+
+    def write_videofile_safe(self, *args, **kwargs):
+             pass
 
 def create_motion_text(content, duration=2.0, style='pop', fontsize=70, color='white', font='Arial-Bold', pos=None, resize_func=None, max_width=None):
     """
@@ -67,32 +90,9 @@ def create_motion_text(content, duration=2.0, style='pop', fontsize=70, color='w
         
         # 1. Stroke Layer (Background)
         # We start with a base config
-        def make_clip(c_color, c_stroke_color, c_stroke_width):
-            # Base arguments for TextClip
-            text_args = {
-                'text': content,
-                'font_size': effective_fontsize,
-                'color': c_color,
-                'stroke_color': c_stroke_color,
-                'stroke_width': c_stroke_width,
-                'method': method
-            }
-            
-            # Only add size if max_width is provided
-            if max_width:
-                text_args['size'] = (max_width, None)
-            
-            try:
-                # Try with specified font
-                return TextClip(**text_args, font=font)
-            except:
-                # Fallback to 'Arial'
-                try:
-                    return TextClip(**text_args, font='Arial')
-                except:
-                    # Final fallback to default font
-                    text_args_minimal = {k: v for k, v in text_args.items() if k != 'font'}
-                    return TextClip(**text_args_minimal)
+        # 1. Stroke Layer (Background)
+        # We start with a base config
+        # (Definition merged below)
 
         # Create the Stroke Layer (Black text with thick black stroke)
         # Note: If we just use stroke_width on the main clip, it renders INSIDE.
@@ -194,7 +194,6 @@ def create_motion_text(content, duration=2.0, style='pop', fontsize=70, color='w
         return txt
     except Exception as e:
         print(f"❌ Error creating TextClip (Final): {e}")
-        import traceback
         traceback.print_exc()
         return None
 
@@ -505,7 +504,7 @@ def render_project(project_data, progress_callback=None):
                          # Landscape or Square -> Crop width
                          center_x = w / 2
                          x1 = center_x - (new_w / 2)
-                         cut_clip = cut_clip.crop(x1=x1, width=new_w, height=h)
+                         cut_clip = cut_clip.cropped(x1=x1, width=new_w, height=h)
                          
                      # 2. Resize to 1080x1920 (Standard HD Shorts)
                      # Check if resize is needed to avoid unnecessary processing
@@ -534,6 +533,7 @@ def render_project(project_data, progress_callback=None):
         # --- NEW: Process Overlays ---
         overlays = project_data.get('overlays', [])
         if overlays:
+            if progress_callback: progress_callback({"status": "processing", "progress": 12, "message": "Generating Text Overlays..."})
             print(f"✨ Adding {len(overlays)} text overlays...")
             print(f"📐 Video resolution: {final_video.size[0]}x{final_video.size[1]}")
             overlay_clips = [final_video] # Base layer
@@ -654,7 +654,6 @@ def render_project(project_data, progress_callback=None):
                         print(f"  ✅ Added overlay at {start}s for {dur}s")
                 except Exception as e:
                     print(f"❌ Failed to add overlay {overlay}: {e}")
-                    import traceback
                     traceback.print_exc()
             
             if len(overlay_clips) > 1:
@@ -736,7 +735,6 @@ def render_project(project_data, progress_callback=None):
                     print(f"   ❌ Music file not found at: {music_path}")
             except Exception as e:
                 print(f"⚠️ Failed to add background music: {e}")
-                import traceback
                 traceback.print_exc()
         elif bg_music_config:
             print(f"⚠️ bgMusic config exists but no source: {bg_music_config}")
@@ -801,6 +799,7 @@ def render_project(project_data, progress_callback=None):
                     print(f"⚠️ Failed to add secondary clip {clip_data}: {e}")
 
         # H. Final Audio Mixing
+        if progress_callback: progress_callback({"status": "processing", "progress": 18, "message": "Mixing Audio Tracks..."})
         print(f"🎚️  Mixing {len(audio_layers)} audio layers...")
         if len(audio_layers) > 0:
              print(f"   Audio layers: {[type(layer).__name__ for layer in audio_layers]}")
@@ -811,6 +810,7 @@ def render_project(project_data, progress_callback=None):
              print(f"   ⚠️  No audio layers to mix - video will be silent!")
         
         # I. Export to MP4
+        if progress_callback: progress_callback({"status": "rendering", "progress": 20, "message": "Starting Encoding..."})
         timestamp = int(time.time())
         output_filename = f"{project_data.get('name', 'video')}_final_{timestamp}.mp4"
         output_path = os.path.join(EXPORT_DIR, output_filename)
@@ -827,6 +827,7 @@ def render_project(project_data, progress_callback=None):
             preset="ultrafast",  # Use 'medium' for better quality, 'ultrafast' for testing
             codec="libx264",
             audio_codec="aac",
+            threads=1,
             ffmpeg_params=['-pix_fmt', 'yuv420p'], # Good for compatibility
             logger=logger
         )
