@@ -73,7 +73,7 @@ export const parseEDLXml = (xmlString: string, metadata?: any): VideoProject => 
 
     return {
       id,
-      source: node.getAttribute('source') || 'Unknown Source',
+      source: node.getAttribute('source') || node.querySelector('source')?.textContent || 'Unknown Source',
       keep: (node.getAttribute('keep') || 'true').toLowerCase().trim() !== 'false',
       reason: node.getAttribute('reason') || 'No reason provided',
       text: node.getAttribute('text') || meta?.text || '',

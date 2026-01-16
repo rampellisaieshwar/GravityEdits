@@ -227,6 +227,7 @@ YOUR 6-STEP MISSION (THE "SUPER-WAKULLAH V2" PROTOCOL):
 
 STEP 1: CONTEXTUAL SANITIZATION
 - Analyze the PRIMARY TOPIC first.
+-Analyze entire text alltogether and cut the words that are not needed and make them false.
 - Remove "Ghost Words" and fix phonetic errors only if confidence > 90%.
 - If a word is deleted, flag the timestamp for a potential "Jump Cut".
 
@@ -258,7 +259,7 @@ STEP 6: PRIORITY SCORING
 - Assign a PRIORITY SCORE (1-5) to every clip in the EDL.
 - 5 = Essential/Hook (Must Keep).
 - 1 = Tangent/Filler (First to Cut).
- - **MANDATORY:** You MUST include the `source` attribute in every <clip> tag, copying the `source_video` value from the input JSON exactly.
+ - ****MANDATORY:**** You MUST include the `source` attribute in every <clip> tag, copying the `source_video` value from the input JSON exactly.
 
 ---------------------------------------------------------
 OUTPUT FORMAT (Strict XML):
@@ -269,7 +270,7 @@ OUTPUT FORMAT (Strict XML):
     </global_settings>
 
     <edl>
-        <clip id="1" start="0.0" end="4.0" keep="true" priority="5" text="This is the only way to fix it.">
+        <clip id="1" source="video.mp4" start="0.0" end="4.0" keep="true" priority="5" text="This is the only way to fix it.">
              <correction type="brightness" value="1.2" />
         </clip>
     </edl>
