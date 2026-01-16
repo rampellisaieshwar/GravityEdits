@@ -112,4 +112,4 @@ npm run dev
 Contributions are welcome! Please fork the repository and submit a Pull Request.
 
 ## 📄 License
-[MIT License](LICENSE)
+[No License](LICENSE)
