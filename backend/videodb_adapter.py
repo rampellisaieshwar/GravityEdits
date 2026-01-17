@@ -10,7 +10,7 @@ class VideoDBAdapter:
         self.api_key = api_key or os.getenv("VIDEODB_API_KEY")
         if not self.api_key:
              # Fallback to the user provided key for testing if env is missing
-             self.api_key = "sk-IJCQabycCipdvdJf_QR53NZuFPdU7SdfIFXRN6DF6sg"
+             os.getenv("VIDEODB_API_KEY")
         
         try:
             self.conn = videodb.connect(api_key=self.api_key)
