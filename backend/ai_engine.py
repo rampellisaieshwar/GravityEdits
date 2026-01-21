@@ -318,6 +318,7 @@ STEP 6: PRIORITY SCORING
 - 5 = Essential/Hook (Must Keep).
 - 1 = Tangent/Filler (First to Cut).
  - ****MANDATORY:**** You MUST include the `source` attribute in every <clip> tag, copying the `source_video` value from the input JSON exactly.
+ - ****MANDATORY:**** You MUST include the `reason` attribute for EVERY clip. If keep="true", explain why (e.g., "Clear audio", "Good hook", "Essential context"). If keep="false", explain the error.
 
 ---------------------------------------------------------
 OUTPUT FORMAT (Strict XML):
@@ -328,7 +329,7 @@ OUTPUT FORMAT (Strict XML):
     </global_settings>
 
     <edl>
-        <clip id="1" source="video.mp4" start="0.0" end="4.0" keep="true" priority="5" text="This is the only way to fix it.">
+        <clip id="1" source="video.mp4" start="0.0" end="4.0" keep="true" priority="5" reason="Strong opening hook" text="This is the only way to fix it.">
              <correction type="brightness" value="1.2" />
         </clip>
     </edl>

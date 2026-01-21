@@ -704,7 +704,7 @@ def render_project(project_data, progress_callback=None):
                 preset="ultrafast", 
                 codec="libx264", 
                 audio_codec="aac", 
-                threads=4,
+                threads=1,
                 logger=None # Silence MoviePy to keep logs clean
             )
 
