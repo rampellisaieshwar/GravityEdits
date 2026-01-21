@@ -406,44 +406,15 @@ async def regenerate_project_xml(project_name: str, request: Optional[Regenerate
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-class ExportRequest(BaseModel):
-    project: dict 
-    mode: Optional[str] = "local" 
-    videodb_key: Optional[str] = None
+# --- ROUTES ---
+try:
+    from .routes import export as export_routes
+    app.include_router(export_routes.router)
+except ImportError as e:
+    print(f"Failed to load export routes: {e}")
 
-@app.post("/export-video/")
-async def export_video(request: ExportRequest):
-    mode = getattr(request, 'mode', 'local') # Handle if mode is missing
-    
-    # Common check
-    if not q_render:
-         return {"error": "Render Service Unavailable (Redis Queue)"}
-    
-    try:
-        if mode == "cloud":
-            # Use q_render but with Cloud Task Function and High Priority
-            job = q_render.enqueue(
-                "backend.worker.tasks.perform_videodb_export_task",
-                request.project, 
-                EXPORT_DIR,
-                videodb_key=request.videodb_key, # Pass key
-                job_timeout='1h',
-                at_front=True # CRITICAL: Cloud Users skip the line!
-            )
-            return {"status": "queued", "job_id": job.id, "mode": "cloud"}
-        else:
-            # Local Standard
-            job = q_render.enqueue(
-                "backend.worker.tasks.perform_export_task",
-                request.project, 
-                EXPORT_DIR,
-                job_timeout='1h'
-            )
-            return {"status": "queued", "job_id": job.id, "mode": "local"}
-            
-    except Exception as e:
-        print(f"Failed to enqueue export: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+# ... (Old export code removed) ...
+
 
 
 @app.get("/export-status/{job_id}")

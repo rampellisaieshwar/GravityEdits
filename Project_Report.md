@@ -36,6 +36,7 @@ We built a full-stack automated video editing platform that combines determinist
     *   **Stage 1: The Inspector**: A forensic AI agent that analyzes the raw transcript and visual metrics to identify errors, "Ghost Words" (hallucinations), and technical flaws. It produces a structured "Hit List" of clips to scrutinize.
     *   **Stage 2: The Director**: A creative AI agent that takes the Inspector's report and the User's creative intent to generate the final Edit Decision List (EDL). It adheres to the "Wakullah Protocol V2" to ensure viral pacing and retention.
     *   **Visual Metrics**: Using `OpenCV` to analyze every clip for brightness and blur.
+    *   **State Management**: Implemented a robust **Command Pattern** (Cut, Split, Move, Add Text) to serialize all user and AI actions. This ensures deterministic state transitions and enables infinite Undo/Redo capabilities.
 
 ### Tech Stack
 *   **Frontend**: React-based Non-Linear Editor (NLE) with Normalized Coordinate System (0-1) for device-agnostic preview.
@@ -55,6 +56,7 @@ The system successfully functions as an autonomous editor. It takes a raw video 
 *   **Intelligent Reframing**: The "Shorts Export" feature successfully crops landscape video into 9:16 portrait mode.
 *   **Dynamic Visuals**: Text overlays are generated at semantic "high value" moments identified by the LLM.
 *   **Accessibility Ready**: Automatically produces standard `.srt` subtitle files synchronized with the final edit.
+*   **Robust State Handling**: The implementation of a formal Command Pattern allows users to reverse any action (Undo/Redo) seamlessly, preventing state corruption during rapid edits.
 
 ### Limitations & Failure Cases
 *   **Processing Time**: Video rendering is computationally expensive.
@@ -68,6 +70,7 @@ The system successfully functions as an autonomous editor. It takes a raw video 
 *   **Prompt Engineering**: Separating concerns into two agents ("Forensic" vs "Creative") yielded significantly better results than a single "Do it all" prompt. The "Inspector" catches errors the "Director" would stream right past.
 *   **Coordinate Normalization**: Using pixel values for UI elements leads to misalignment across devices. Switching to a normalized 0.0-1.0 float system solved "Invisible Text" bugs.
 *   **Asynchronous Processing**: Rendering video blocks the main thread. Implementing the Redis Task Queue was critical.
+*   **State Synchronization**: Keeping the React Frontend state perfectly in sync with the Python Backend required a strict "Command Pattern" approach. This prevents race conditions where the AI and User might try to edit the timeline simultaneously.
 
 ### Challenges Faced & Resolution
 *   **Server Crashes (OOM)**: Pure Python rendering (MoviePy) caused memory leaks and crashes on large files.

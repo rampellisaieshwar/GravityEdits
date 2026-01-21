@@ -190,7 +190,14 @@ const ExportOverlay: React.FC<ExportOverlayProps> = ({ onClose, project, initial
         setJobId(data.job_id);
         // Status remains 'processing', polling effect takes over
       } else {
-        alert("Render start failed: " + (data.detail || data.error || "Unknown error"));
+        const errorMsg = data.detail || data.error || "Unknown error";
+        if (errorMsg.includes("File too large") || errorMsg.includes("Free Tier")) {
+          if (confirm(`⚠️ LIMIT REACHED: ${errorMsg}\n\nWould you like to switch to Cloud Turbo Mode (Fast & Unlimited)?`)) {
+            setRenderMode('cloud');
+          }
+        } else {
+          alert("Render start failed: " + errorMsg);
+        }
         setStatus('idle');
       }
     } catch (e) {
