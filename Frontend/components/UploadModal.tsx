@@ -22,7 +22,12 @@ const UploadModal: React.FC<UploadModalProps> = ({ onComplete, setProject, proje
   const fileInputRef = useRef<HTMLInputElement>(null);
   const xmlInputRef = useRef<HTMLInputElement>(null);
 
-  const effectiveProjectName = projectName || "Project_Default";
+  // Sanitize name to match backend logic (alphanumeric, space, underscore, dash)
+  const sanitizeName = (name: string) => {
+    return name.replace(/[^a-zA-Z0-9 _-]/g, "").trim();
+  };
+
+  const effectiveProjectName = sanitizeName(projectName || "Project_Default");
 
   const checkAnalysisStatus = async () => {
     if (!analysisJobId) return false;
@@ -199,9 +204,10 @@ const UploadModal: React.FC<UploadModalProps> = ({ onComplete, setProject, proje
     // Determine default duration scheme if backend returned 0
     const defaultDuration = 10;
 
-    const manualClips = uploadedFiles.map((file, idx) => ({
+    const manualClips = uploadedFiles.map((file: any, idx) => ({
       id: `manual-${idx}-${Date.now()}`,
-      source: file.name,
+      // Use the full web-accessible path from backend if available, otherwise just name (which might fail if pName mismatch)
+      source: file.path || file.name,
       keep: true,
       reason: 'Manual Import',
       // Manual clips usually play the whole file, so start=0, end=duration

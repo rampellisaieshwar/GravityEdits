@@ -188,7 +188,7 @@ const ProgramMonitor: React.FC<ProgramMonitorProps> = ({
 
   // Helper to construct media URLs correctly based on project context
   const getMediaUrl = (source: string) => {
-    if (source.startsWith('http')) return source;
+    if (source.startsWith('http') || source.startsWith('/')) return source;
     // If we are in a project context, files are likely in the project folder
     const pName = originalProjectName || (project?.name ? project.name.split(' [')[0] : null);
     if (pName) {
