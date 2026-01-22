@@ -746,7 +746,7 @@ const App: React.FC = () => {
           {isUploading && (
             <UploadModal
               onComplete={handleUploadComplete}
-              setProject={(p) => handleProjectLoaded(p, currentProjectName || undefined, false)}
+              setProject={(p) => handleProjectLoaded(p, currentProjectName || undefined, true)}
               projectName={currentProjectName}
             />
           )}

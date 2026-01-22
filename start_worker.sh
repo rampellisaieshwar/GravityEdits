@@ -17,4 +17,4 @@ else
     PYTHON_CMD=python
 fi
 
-$PYTHON_CMD -m rq worker default analysis render videodb
+rq worker default analysis render videodb

@@ -14,16 +14,45 @@ os.makedirs(TEMP_AUDIO_DIR, exist_ok=True)
 MODEL_SIZE = "base"
 
 def extract_audio(video_path):
-    # Same as before
+    """
+    Extracts audio from video using FFmpeg directly (faster & more robust than MoviePy).
+    """
     base_name = os.path.basename(video_path)
     audio_path = os.path.join(TEMP_AUDIO_DIR, f"{base_name}.wav")
-    if os.path.exists(audio_path): return audio_path
     
-    from moviepy import VideoFileClip
-    video = VideoFileClip(video_path)
-    video.audio.write_audiofile(audio_path, logger=None)
-    video.close()
-    return audio_path
+    # If audio already exists, skip
+    if os.path.exists(audio_path): 
+        print(f"      Audio already exists: {audio_path}")
+        return audio_path
+    
+    print(f"      Extracting audio to {audio_path}...")
+    
+    try:
+        import subprocess
+        # FFmpeg command: -i input -vn (no video) -acodec pcm_s16le (wav standard) -ar 16000 (good for whisper) -ac 1 (mono) -y (overwrite)
+        command = [
+            "ffmpeg", "-i", video_path, 
+            "-vn", "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1", 
+            "-y", audio_path
+        ]
+        
+        # Run silently
+        subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        return audio_path
+        
+    except Exception as e:
+        print(f"      ⚠️ FFmpeg extraction failed: {e}. Falling back to MoviePy.")
+        
+        try:
+            from moviepy import VideoFileClip
+            video = VideoFileClip(video_path)
+            video.audio.write_audiofile(audio_path, logger=None)
+            video.close()
+            return audio_path
+        except Exception as e2:
+             print(f"      ❌ MoviePy also failed: {e2}")
+             raise e2
 
 def transcribe_audio(audio_path):
     print(f"      [2/3] Transcribing Audio for {os.path.basename(audio_path)}...")
