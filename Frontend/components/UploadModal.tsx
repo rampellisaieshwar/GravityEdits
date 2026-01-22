@@ -196,22 +196,40 @@ const UploadModal: React.FC<UploadModalProps> = ({ onComplete, setProject, proje
   }, [analysisJobId]);
 
   const handleManual = () => {
+    // Determine default duration scheme if backend returned 0
+    const defaultDuration = 10;
+
+    const manualClips = uploadedFiles.map((file, idx) => ({
+      id: `manual-${idx}-${Date.now()}`,
+      source: file.name,
+      keep: true,
+      reason: 'Manual Import',
+      // Manual clips usually play the whole file, so start=0, end=duration
+      start: 0,
+      end: file.duration || defaultDuration,
+      duration: file.duration || defaultDuration,
+      emotionScore: 50,
+      visual_data: { brightness: "normal" } // Mock visual data for safety
+    }));
+
     const manualProject: VideoProject = {
       name: effectiveProjectName,
       globalSettings: { filterSuggestion: 'None' },
-      edl: uploadedFiles.map((file, idx) => ({
-        id: `manual-${idx}`,
-        source: file.name,
-        keep: true,
-        reason: 'Manual Import',
-        // Mock duration/score so it renders in Timeline
-        duration: file.duration || 10,
-        emotionScore: 50
-      })),
+      edl: manualClips,
       viralShorts: [],
-      overlays: []
+      overlays: [],
+      // Initialize optional audio fields to prevent undefined crashes in Timeline
+      audioTracks: [2],
+      trackVolumes: { a1: 1, a2: 1, music: 1 },
+      audioClips: [],
+      bgMusic: undefined
     };
+
+    console.log("Initializing Manual Project:", manualProject);
     setProject(manualProject);
+
+    // Slight delay to ensure state propagates before unmounting? 
+    // No, App handles sync. But let's be safe.
     onComplete();
   };
 
