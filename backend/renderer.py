@@ -398,8 +398,13 @@ def render_project(project_data, progress_callback=None):
             
             try:
                 # A. Resolve Source Path
-                # Priority 1: Uploads folder (Legacy)
-                source_path = os.path.join(UPLOAD_DIR, os.path.basename(source_name))
+
+                # Priority 0: Absolute Path (Provided by Manual Mode or Direct Link)
+                if os.path.isabs(source_name) and os.path.exists(source_name):
+                    source_path = source_name
+                else:
+                    # Priority 1: Uploads folder (Legacy)
+                    source_path = os.path.join(UPLOAD_DIR, os.path.basename(source_name))
                 
                 # Priority 2: Project Specific Folder
                 if not os.path.exists(source_path):
